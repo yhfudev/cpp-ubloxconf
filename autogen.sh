@@ -47,11 +47,16 @@ else
     git clone -q --depth=1 https://github.com/yhfudev/cpp-ci-unit-test.git
   fi
   cd cpp-ci-unit-test && git pull && cd ..
+  if [ ! -d libuv ]; then
+    git clone -q --depth=1 https://github.com/libuv/libuv.git
+  fi
+  cd libuv && git pull && ./autogen.sh && ./configure && make clean && make -j8 && cd ..
 
   which "$CC" || CC=gcc
   which "$CXX" || if [[ "$CC" =~ .*clang.* ]]; then CXX=clang++; else CXX=g++; fi
   CC=$CC CXX=$CXX ./configure --disable-shared --enable-static --disable-debug --enable-coverage --enable-valgrind \
     --with-ciut=`pwd`/cpp-ci-unit-test \
+    --with-libuv-include=`pwd`/libuv/include --with-libuv-lib=`pwd`/libuv/.libs/ \
     ${NULL}
   make clean; make -j 8 coverage CC=$CC CXX=$CXX; make check CC=$CC CXX=$CXX; make check-valgrind CC=$CC CXX=$CXX
 fi

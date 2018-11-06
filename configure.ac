@@ -70,6 +70,41 @@ if test x${native_win32} = xyes; then
   LIBS="${LIBS} -lws2_32 -lpsapi -liphlpapi -lshell32 -luserenv -luser32"
 fi
 
+
+# libuv
+AC_ARG_WITH(libuv,
+            [AS_HELP_STRING([--with-libuv],[Base directory to look for libuv headers and libraries])],
+            [LIBUV_LIB_DIR="${withval}/lib"
+             LIBUV_INC_DIR="${withval}/include"],)
+
+AC_ARG_WITH(libuv-lib,
+            [AS_HELP_STRING([--with-libuv-lib],[Directory to look for libuv libraries])],
+            [LIBUV_LIB_DIR="${withval}"],)
+
+AC_ARG_WITH(libuv-include,
+            [AS_HELP_STRING([--with-libuv-include],[Directory to look for libuv headers])],
+            [LIBUV_INC_DIR="${withval}"],)
+if test "x$LIBUV_INC_DIR" != "x" ; then
+  CFLAGS="-I${LIBUV_INC_DIR} ${CFLAGS}"
+  SAVE_CPPFLAGS="$CPPFLAGS"
+  CPPFLAGS="$CPPFLAGS -I${LIBUV_INC_DIR}"
+  AC_CHECK_HEADERS([uv.h], [ LIBUVH='yes' ], AC_MSG_ERROR([Couldn't find libuv header ]), [])
+  CPPFLAGS="$SAVE_CPPFLAGS"
+else
+  #CFLAGS="-std=iso9899:1990 ${CFLAGS}"
+  #AC_LANG_PUSH([C++])
+  AC_CHECK_HEADERS([uv.h], [ LIBUVH='yes' ], AC_MSG_ERROR([Couldn't find libuv header ]), [])
+  #AC_LANG_POP
+fi
+if test "x$LIBUV_LIB_DIR" != "x" ; then
+  LDFLAGS="-L${LIBUV_LIB_DIR} -luv ${LDFLAGS}"
+  AC_CHECK_LIB([uv], [uv_tcp_init], [ LIBUVL='yes' ], AC_MSG_ERROR([Couldn't find libuv lib file ]), [-L${LIBUV_LIB_DIR} -pthread])
+else
+  LDFLAGS="-L/usr/local/lib/ -luv ${LDFLAGS}"
+  AC_CHECK_LIB([uv], [uv_tcp_init], [ LIBUVL='yes' ], AC_MSG_ERROR([Couldn't find libuv lib file ]), [-L/usr/local/lib/ -pthread])
+fi
+
+
 # ciut
 AC_ARG_WITH(ciut,
             [AS_HELP_STRING([--with-ciut],[Base directory to look for ciut headers and libraries])],
