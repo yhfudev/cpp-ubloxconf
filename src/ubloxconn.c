@@ -33,6 +33,11 @@
 #define UBX_RXM_SFRBX 0x0213
 #define UBX_RXM_RAWX 0x0215
 
+#define UBX_TRK_D5    0x030A
+#define UBX_TRK_MEAS  0x0310
+#define UBX_TRK_SFRBX 0x030F
+
+
 #define UBX_ACK_ACK 0x0501
 #define UBX_ACK_NAK 0x0500
 
@@ -68,10 +73,14 @@ ublox_val2cstr_classid(uint16_t class, uint16_t id)
         UBLOX_V2S(UBX_RXM_RAWX);
         UBLOX_V2S(UBX_RXM_SFRBX);
 
-        UBLOX_V2S(UBX_UNK_MG1);
-
         UBLOX_V2S(UBX_NAV_TIMEGPS);
         UBLOX_V2S(UBX_NAV_CLOCK);
+
+        UBLOX_V2S(UBX_UNK_MG1);
+
+        UBLOX_V2S(UBX_TRK_D5);
+        UBLOX_V2S(UBX_TRK_MEAS);
+        UBLOX_V2S(UBX_TRK_SFRBX);
     }
     return "UNKNOWN_UBX_ID";
 #undef UBLOX_V2S
@@ -654,6 +663,20 @@ ublox_pkt_expected_size(uint8_t * buffer_in, size_t sz_in)
     return sz;
 }
 
+
+static char * ublox_val2cstr_gnss(int type)
+{
+    switch (type) {
+        case 0: return "GPS";
+        case 1: return "SBS";
+        case 2: return "GAL";
+        case 3: return "CMP"; // beidou
+        case 5: return "QZS";
+        case 6: return "GLO";
+    }
+    return "UNKNOWN_GNSS";
+}
+
 /**
  * \brief read and verify the return packet from ublox module(TCP server)
  * \param buffer_in: the buffer contains received packets
@@ -1156,6 +1179,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         }
     }
         break;
+
     case UBX_RXM_RAWX: // ublox8
     {
         float  f4;
@@ -1255,6 +1279,107 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     }
         break;
 
+    case UBX_TRK_D5:
+    {
+        float  f4;
+        double f8;
+        uint16_t val16;
+
+        int len;
+        int type;
+        type = *p;
+
+        fprintf(stderr, "\ttype: %d\n", type);
+        switch(type) {
+        case 3: p += 80; len = 56; break;
+        case 6: p += 80; len = 64; break; // ublox7
+        default: p += 72; len = 56; break;
+        }
+        for (i = 0; p < buffer_in + sz_in - 2; i ++, p += len) {
+            memmove(&f8, p, sizeof(f8));
+            fprintf(stderr, "\t[%d]\tts: %f\n", i, f8); // transmission time
+
+            memmove(&f8, p+8, sizeof(f8));
+            fprintf(stderr, "\t\tadr: %f\n", f8);
+            memmove(&f4, p+16, sizeof(f4));
+            fprintf(stderr, "\t\tdop: %f\n", f4);
+
+            val16 = U16_LE(p+32);
+            fprintf(stderr, "\t\tsnr: %04X\n", val16);
+
+            // quality indicator
+            fprintf(stderr, "\t\tqi=%02X\n", (*(p+41)) & 0x07);
+
+#define MINPRNSBS   120                 /* min satellite PRN number of SBAS */
+            if (type == 6) {
+                fprintf(stderr, "\t\tgnss=%s\n", ublox_val2cstr_gnss(*(p+56)));
+                fprintf(stderr, "\t\tprn=%d\n", (*(p+57)));
+                fprintf(stderr, "\t\tfrq=%d\n", (*(p+59)));
+            } else {
+                int prn;
+                prn = *(p+34);
+                fprintf(stderr, "\t\tgnss=%s\n", ublox_val2cstr_gnss((prn<MINPRNSBS)?0/*GPS*/:1/*SBS*/));
+                fprintf(stderr, "\t\tprn=%d\n", (*(p+34)));
+            }
+            fprintf(stderr, "\t\tflags=%02X\n", (*(p+54)));
+
+        }
+    }
+        break;
+
+    case UBX_TRK_MEAS:
+    {
+        float  f4;
+        double f8;
+        uint16_t val16;
+
+        int len;
+        int nch; // number of channel
+        nch = *(p + 2);
+
+        fprintf(stderr, "\tnch: %d\n", nch);
+
+        len = 56;
+        p += 104;
+        for (i = 0; p < buffer_in + sz_in - 2; i ++, p += len) {
+            fprintf(stderr, "\t[%d]\tgnss=%s\n", i, ublox_val2cstr_gnss(*(p+4)));
+
+            /* quality indicator (0:idle,1:search,2:aquired,3:unusable, */
+            /*                    4:code lock,5,6,7:code/carrier lock) */
+            fprintf(stderr, "\t\tqi=%02X\n", (*(p+1)));
+
+            fprintf(stderr, "\t\tprn=%02X\n", (*(p+5)));
+
+            memmove(&f8, p+24, sizeof(f8));
+            fprintf(stderr, "\t\tts: %f\n", f8); // transmission time
+
+            fprintf(stderr, "\t\tfrq=%02X\n", (*(p+7)));  // frequency
+            fprintf(stderr, "\t\tflag=%02X\n", (*(p+8))); // tracking status
+            fprintf(stderr, "\t\tlock1=%02X\n", (*(p+16))); // code lock count
+            fprintf(stderr, "\t\tlock2=%02X\n", (*(p+17))); // phase lock count
+
+            val16 = U16_LE(p + 20);
+            fprintf(stderr, "\t\tsnr: %04X\n", val16);
+
+            memmove(&f8, p+32, sizeof(f8));
+            fprintf(stderr, "\t\tadr: %f\n", f8); // transmission time
+
+            memmove(&f4, p+40, sizeof(f4));
+            fprintf(stderr, "\t\tdop: %f\n", f4);
+        }
+    }
+        break;
+
+    case UBX_TRK_SFRBX:
+    {
+        int type;
+        type = *(p+1);
+        fprintf(stderr, "\ttype: %d\n", type);
+        fprintf(stderr, "\tprn=%02X\n", (*(p+2)));
+
+    }
+        break;
+
     default:
         sz = ublox_pkt_expected_size(buffer_in, sz_in);
         if (sz < 1) {
@@ -1274,6 +1399,8 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
 
     assert (NULL != sz_processed);
     *sz_processed = UBLOX_PKT_LENGTH_MIN + count;
+    assert(*sz_processed <= sz_in);
+
     return 0;
 }
 
