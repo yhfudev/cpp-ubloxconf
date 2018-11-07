@@ -80,6 +80,9 @@ ssize_t ublox_pkt_create_get_version (uint8_t *buffer, size_t sz_buf);
 ssize_t ublox_pkt_create_get_hw (uint8_t *buffer, size_t sz_buf);
 ssize_t ublox_pkt_create_get_hw2 (uint8_t *buffer, size_t sz_buf);
 
+ssize_t ublox_pkt_create_get_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint8_t id);
+ssize_t ublox_pkt_create_set_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint8_t id, uint8_t *rates, int num_rate);
+
 ssize_t ublox_pkt_create_unknown_msg1 (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_t u4_2, uint32_t u4_3, uint16_t u2_1, uint8_t class, uint8_t id);
 
 int ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, size_t * sz_needed_in);

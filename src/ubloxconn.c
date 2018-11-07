@@ -24,19 +24,29 @@
 
 
 /*****************************************************************************/
+
+#define UBX_NAV_TIMEGPS  0x0120
+#define UBX_NAV_CLOCK    0x0122
+
+#define UBX_RXM_RAW  0x0210
+#define UBX_RXM_SFRB 0x0211
+#define UBX_RXM_SFRBX 0x0213
+#define UBX_RXM_RAWX 0x0215
+
+#define UBX_ACK_ACK 0x0501
+#define UBX_ACK_NAK 0x0500
+
+#define UBX_CFG_MSG 0x0601
+
+#define UBX_UNK_MG1 0x0901
+
 #define UBX_MON_VER 0x0A04
 #define UBX_MON_HW  0x0A09
 #define UBX_MON_HW2 0x0A0B
 #define UBX_MON_RXR 0x0A21
 
-#define UBX_ACK_ACK 0x0501
-#define UBX_ACK_NAK 0x0500
 
-#define UBX_RXM_RAW  0x0210
-#define UBX_RXM_SFRB 0x0211
-
-#define UBX_UNK_MG1 0x0901
-
+#define UBLOX_PKG_LENGTH(p) ((unsigned int)((p)[4]) | (((unsigned int)((p)[5])) << 8))
 
 #define UBLOX_CLASS_ID(class,id) (((class) << 8) | (id))
 
@@ -55,8 +65,13 @@ ublox_val2cstr_classid(uint16_t class, uint16_t id)
 
         UBLOX_V2S(UBX_RXM_RAW);
         UBLOX_V2S(UBX_RXM_SFRB);
+        UBLOX_V2S(UBX_RXM_RAWX);
+        UBLOX_V2S(UBX_RXM_SFRBX);
 
         UBLOX_V2S(UBX_UNK_MG1);
+
+        UBLOX_V2S(UBX_NAV_TIMEGPS);
+        UBLOX_V2S(UBX_NAV_CLOCK);
     }
     return "UNKNOWN_UBX_ID";
 #undef UBLOX_V2S
@@ -101,8 +116,6 @@ ublox_pkt_checksum(void *buffer, int length, char * out_buf)
     }
 }
 
-#define UBLOX_PKG_LENGTH(p) ((unsigned int)((p)[4]) | (((unsigned int)((p)[5])) << 8))
-
 /**
  * \brief verify if the packet is correct
  * \param buffer:   the buffer contains the packet
@@ -125,7 +138,7 @@ ublox_pkt_verify (uint8_t *buffer, size_t sz_buf)
         return 0;
     }
 
-    fprintf(stderr, "Verify error: checksum. sz=%d,len=%d, expected=0x%02X%02X, got=0x%02X%02X\n", sz_buf, count, *(buffer + 6 + count), *(buffer + 6 + count + 1), chksum[0], chksum[1]);
+    fprintf(stderr, "Verify error: checksum. sz_buf=%d,count=%d, expected=0x%02X%02X, got=0x%02X%02X\n", sz_buf, count, *(buffer + 6 + count), *(buffer + 6 + count + 1), chksum[0], chksum[1]);
     return -1;
 }
 
@@ -404,6 +417,99 @@ ublox_pkt_create_unknown_msg1 (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, ui
 }
 
 
+/**
+ * \brief fill the buffer with the 'UBX-CFG-MSG' packet
+ * \param buffer:   the buffer to be filled
+ * \param sz_buf:   the byte size of the buffer
+ * \return <0 on fail, >0 the size of packet
+ */
+ssize_t
+ublox_pkt_create_get_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint8_t id)
+{
+    ssize_t ret = 0;
+
+    if (NULL == buffer) {
+        return -1;
+    }
+    if (sz_buf < 8) {
+        return -1;
+    }
+    ret = 8;
+    assert (NULL != buffer);
+
+    // header
+    buffer[0] = 0xB5;
+    buffer[1] = 0x62;
+    // class
+    buffer[2] = 0x06;
+    // ID
+    buffer[3] = 0x01;
+    // length, little endian
+    buffer[4] = 0x02; // 2 bytes
+    buffer[5] = 0x00;
+
+    // payload
+    ret = 6;
+    buffer[ret ++] = class;
+    buffer[ret ++] = id;
+
+    ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
+    ret += 2;
+    assert(ret == 24);
+
+    return ret;
+}
+
+/**
+ * \brief fill the buffer with the 'UBX-CFG-MSG' packet
+ * \param buffer:   the buffer to be filled
+ * \param sz_buf:   the byte size of the buffer
+ * \return <0 on fail, >0 the size of packet
+ */
+ssize_t
+ublox_pkt_create_set_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint8_t id, uint8_t *rates, int num_rates)
+{
+    ssize_t ret = 0;
+
+    if (NULL == buffer) {
+        return -1;
+    }
+    if (sz_buf < 8) {
+        return -1;
+    }
+    if ((num_rates != 1) && (num_rates != 6)) {
+        return -1;
+    }
+    ret = 8;
+    assert (NULL != buffer);
+
+    fprintf(stderr, "ublox_pkt_create_set_cfgmsg(class=%d, id=%d, reats[]=%d,%d,%d,%d,%d,%d\n", class, id, rates[0], rates[1], rates[2], rates[3], rates[4], rates[5]);
+
+    // header
+    buffer[0] = 0xB5;
+    buffer[1] = 0x62;
+    // class
+    buffer[2] = 0x06;
+    // ID
+    buffer[3] = 0x01;
+    // length, little endian
+    buffer[4] = 2 + num_rates;
+    buffer[5] = 0x00;
+
+    // payload
+    ret = 6;
+    buffer[ret ++] = class;
+    buffer[ret ++] = id;
+    memmove(buffer + ret, rates, num_rates);
+    ret += num_rates;
+
+    ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
+    ret += 2;
+    assert(ret == 8 + 2 + num_rates);
+
+    return ret;
+}
+
 #if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
 #include <ciut.h>
 
@@ -517,6 +623,36 @@ ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, 
     return -1;
 }
 
+// return the expected pkt size
+size_t
+ublox_pkt_expected_size(uint8_t * buffer_in, size_t sz_in)
+{
+    // check header
+    if (buffer_in[0] != 0xB5) {
+        return 0;
+    }
+    if (buffer_in[1] != 0x62) {
+        return 1;
+    }
+    // check class,id
+    size_t sz = 8+UBLOX_PKG_LENGTH(buffer_in);
+    switch (UBLOX_CLASS_ID(buffer_in[2], buffer_in[3])) {
+    case UBX_MON_VER: break;
+    case UBX_MON_HW:  sz=8+68; break;
+    case UBX_MON_HW2: sz=8+28; break;
+    case UBX_MON_RXR: sz=8+1; break;
+    case UBX_ACK_ACK: sz=8+2; break;
+    case UBX_ACK_NAK: sz=8+2; break;
+    case UBX_CFG_MSG: sz=8+2; break;
+    case UBX_RXM_RAW:
+        sz = 8 + 8 + buffer_in[6+6];
+        break;
+    case UBX_RXM_SFRB: sz=8+42; break;
+    case UBX_UNK_MG1:  sz=8+16; break;
+    }
+
+    return sz;
+}
 
 /**
  * \brief read and verify the return packet from ublox module(TCP server)
@@ -533,6 +669,7 @@ ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, 
 int
 ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, size_t * sz_needed_in)
 {
+    size_t sz;
     int i;
     uint8_t *p;
     uint16_t classid;
@@ -565,9 +702,22 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         fprintf(stderr, "ublox warning: need more data, size=%" PRIuSZ ".\n", *sz_needed_in);
         return 1;
     }
+
+    sz = ublox_pkt_expected_size(buffer_in, sz_in);
+    if (sz > sz_in) {
+        *sz_needed_in = sz - sz_in;
+        return 1;
+    }
+
     if (0 != ublox_pkt_verify(buffer_in, sz_in)) {
         fprintf(stderr, "ublox error: packet verify.\n");
         hex_dump_to_fd(STDERR_FILENO, buffer_in, sz_in);
+
+        // try to skip the data
+        *sz_processed = ublox_pkt_expected_size(buffer_in, sz_in);
+        if (*sz_processed < 1) {
+            *sz_processed = 1;
+        }
         return 2;
     }
 
@@ -813,9 +963,312 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     }
         break;
 
+    case UBX_NAV_TIMEGPS:
+    {
+        uint32_t val32;
+        int32_t vali32;
+        uint16_t val16;
+        int16_t vali16;
+        assert(count == 16);
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tiTOW: %08X\n", val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        memmove(&vali32, &val32, sizeof(val32));
+        fprintf(stderr, "\tfTOW: %d\n", vali32);
+        p += 4;
+
+        val16 = U16_LE(p);
+        memmove(&vali16, &val16, sizeof(val16));
+        fprintf(stderr, "\tweek: %d\n", vali16);
+        p += 2;
+
+        fprintf(stderr, "\tleapS: %d\n", *((char *)p));
+        p += 1;
+
+        fprintf(stderr, "\tvalid: %02X\n", *p);
+        p += 1;
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\ttAcc: %08X\n", val32);
+        p += 4;
+    }
+        break;
+
+    case UBX_NAV_CLOCK:
+    {
+        uint32_t val32;
+        int32_t vali32;
+        uint16_t val16;
+        int16_t vali16;
+        assert(count == 20);
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tiTOW: %08X\n", val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        memmove(&vali32, &val32, sizeof(val32));
+        fprintf(stderr, "\tclkB: %d\n", vali32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        memmove(&vali32, &val32, sizeof(val32));
+        fprintf(stderr, "\tclkD: %d\n", vali32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\ttAcc: %08X\n", val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tfAcc: %08X\n", val32);
+        p += 4;
+    }
+        break;
+
+    case UBX_RXM_RAW:
+    {
+        // R4 IEEE 754 Single Precision
+        // R8 IEEE 754 Double Precision
+        int numSV;
+        float  f4;
+        double f8;
+
+        uint32_t val32;
+        int32_t vali32;
+        uint16_t val16;
+        int16_t vali16;
+
+        // l4 iTOW
+        val32 = U32_LE(p);
+        memmove(&vali32, &val32, sizeof(val32));
+        fprintf(stderr, "\tiTOW: %d\n", vali32);
+        p += 4;
+
+        // l2 week
+        val16 = U16_LE(p);
+        memmove(&vali16, &val16, sizeof(val16));
+        fprintf(stderr, "\tweek: %d\n", vali16);
+        p += 2;
+
+        // U1 numSV
+        numSV = *p;
+        fprintf(stderr, "\tnumSV: %02X\n", *p);
+        p += 1;
+
+        // U1 reserved1
+        fprintf(stderr, "\treserved1: %02X\n", *p);
+        p += 1;
+
+        // repeats: 24*numSV
+        //   R8 cpMes
+        //   R8 prMes
+        //   R4 doMes
+        //   U1 sv
+        //   l1 mesQI
+        //   l1 cno
+        //   U1 lli
+        for (i = 0; i < numSV; i ++) {
+            memmove(&f8, p, sizeof(f8));
+            fprintf(stderr, "\t[%d]\tcpMes: %f\n", i, f8);
+            p += 8;
+
+            memmove(&f8, p, sizeof(f8));
+            fprintf(stderr, "\t\tprMes: %f\n", f8);
+            p += 8;
+
+            memmove(&f4, p, sizeof(f4));
+            fprintf(stderr, "\t\tdoMes: %f\n", f4);
+            p += 4;
+
+            fprintf(stderr, "\t\tsv: %02X\n", *p);
+            p += 1;
+
+            fprintf(stderr, "\t\tmesQI: %d\n", *((char *)p));
+            p += 1;
+
+            fprintf(stderr, "\t\tcno: %d\n", *((char *)p));
+            p += 1;
+
+            fprintf(stderr, "\t\tlli: %02X\n", *p);
+            p += 1;
+        }
+    }
+        break;
+    case UBX_RXM_SFRB:
+    {
+        uint32_t val32;
+
+        // U1 chn
+        fprintf(stderr, "\tchn: %02X\n", *p);
+        p += 1;
+        // U1 svid
+        fprintf(stderr, "\tsvid: %02X\n", *p);
+        p += 1;
+        // X4[10] dwrd
+        for(i = 0; i < 10; i ++) {
+            val32 = U32_LE(p);
+            fprintf(stderr, "\tdwrd[%d]: %d\n", i, val32);
+            p += 4;
+        }
+    }
+        break;
+    case UBX_RXM_SFRBX: // ublox8
+    {
+        int numWords;
+        uint32_t val32;
+
+        // U1 gnssId
+        fprintf(stderr, "\tgnssId: %02X\n", *p);
+        p += 1;
+        // U1 svId
+        fprintf(stderr, "\tsvId: %02X\n", *p);
+        p += 1;
+        // U1 reserved1
+        fprintf(stderr, "\treserved1: %02X\n", *p);
+        p += 1;
+        // U1 freqId
+        fprintf(stderr, "\tfreqId: %02X\n", *p);
+        p += 1;
+        // U1 numWords
+        numWords = *p;
+        fprintf(stderr, "\tnumWords: %02X\n", *p);
+        p += 1;
+        // U1 reserved2
+        fprintf(stderr, "\treserved2: %02X\n", *p);
+        p += 1;
+        // U1 version
+        fprintf(stderr, "\tversion: %02X\n", *p);
+        p += 1;
+        // U1 reserved3
+        fprintf(stderr, "\treserved3: %02X\n", *p);
+        p += 1;
+
+        // repeats: 4*numWords
+        //   U4 dwrd
+        for(i = 0; i < numWords; i ++) {
+            val32 = U32_LE(p);
+            fprintf(stderr, "\tdwrd[%d]: %08X\n", i, val32);
+            p += 4;
+        }
+    }
+        break;
+    case UBX_RXM_RAWX: // ublox8
+    {
+        float  f4;
+        double f8;
+        uint16_t val16;
+        int numMeas;
+
+        // R8 rcvTow
+        memmove(&f8, p, sizeof(f8));
+        fprintf(stderr, "\trcvTow: %f\n", f8);
+        p += 8;
+
+        // U2 week
+        val16 = U16_LE(p);
+        fprintf(stderr, "\tweek: %d\n", val16);
+        p += 2;
+
+        // l1 leapS
+        fprintf(stderr, "\tleapS: %d\n", *((char *)p));
+        p += 1;
+
+        // U1 numMeas
+        numMeas = *p;
+        fprintf(stderr, "\tnumMeas: %02X\n", *p);
+        p += 1;
+
+        // X1 recStat
+        fprintf(stderr, "\trecStat: %02X\n", *p);
+        p += 1;
+
+        // U1[3] reserved1
+        p += 3;
+
+        // repeats: 32*numMeas
+        //   R8 prMes
+        //   R8 cpMes
+        //   R4 doMes
+        //   U1 gnssId
+        //   U1 svId
+        //   U1 reserved2
+        //   U1 freqId
+        //   U2 locktime
+        //   U1 cno
+        //   X1 prStdev
+        //   X1 cpStdev
+        //   X1 doStdev
+        //   X1 trkStat
+        //   U1 reserved3
+        for (i = 0; i < numMeas; i ++) {
+            memmove(&f8, p, sizeof(f8));
+            fprintf(stderr, "\t[%d]\tprMes: %f\n", i, f8);
+            p += 8;
+
+            memmove(&f8, p, sizeof(f8));
+            fprintf(stderr, "\t\tcpMes: %f\n", f8);
+            p += 8;
+
+            memmove(&f4, p, sizeof(f4));
+            fprintf(stderr, "\t\tdoMes: %f\n", f4);
+            p += 4;
+
+            fprintf(stderr, "\t\tgnssId: %02X\n", *p);
+            p += 1;
+
+            fprintf(stderr, "\t\tsvId: %02X\n", *p);
+            p += 1;
+
+            p += 1;
+
+            fprintf(stderr, "\t\tfreqId: %02X\n", *p);
+            p += 1;
+
+            val16 = U16_LE(p);
+            fprintf(stderr, "\t\tlocktime: %04X\n", val16);
+            p += 2;
+
+            fprintf(stderr, "\t\tcno: %02X\n", *p);
+            p += 1;
+
+            fprintf(stderr, "\t\tprStdev: %02X\n", *p);
+            p += 1;
+
+            fprintf(stderr, "\t\tcpStdev: %02X\n", *p);
+            p += 1;
+
+            fprintf(stderr, "\t\tdoStdev: %02X\n", *p);
+            p += 1;
+
+            fprintf(stderr, "\t\ttrkStat: %02X\n", *p);
+            p += 1;
+
+            fprintf(stderr, "\t\treserved3: %02X\n", *p);
+            p += 1;
+
+        }
+
+    }
+        break;
+
     default:
+        sz = ublox_pkt_expected_size(buffer_in, sz_in);
+        if (sz < 1) {
+            sz = 1;
+        }
+        if (sz > sz_in) {
+            sz = sz_in;
+        }
+        *sz_processed = sz;
+
         fprintf(stderr, "ublox error: unsupport command in packet: classid=%s(0x%04X)\n", ublox_val2cstr_classid(buffer_in[2], buffer_in[3]), classid);
-        return -1;
+        hex_dump_to_fd(STDERR_FILENO, buffer_in, sz_in);
+
+        return 2;
         break;
     }
 
