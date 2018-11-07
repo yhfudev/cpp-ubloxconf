@@ -52,7 +52,7 @@ typedef struct _ubloxdata_client_t {
     time_t timeout;
 
     size_t sz_data; /**< the lenght of data in the buffer */
-    uint8_t buffer[UBLOX_PKT_LENGTH_MIN + 300]; /**< the buffer to cache the received packets */
+    uint8_t buffer[UBLOX_PKT_LENGTH_MIN + 1200]; /**< the buffer to cache the received packets */
 } ubloxdata_client_t;
 
 ubloxdata_client_t g_ubxcli;
@@ -115,7 +115,7 @@ ubxcli_process_data (ubloxdata_client_t * ped, uv_stream_t *stream)
         fprintf(stderr,"tcp cli ubxcli_process_data() ped->sz_data=%" PRIuSZ "\n", ped->sz_data);
         assert (NULL != buffer_in);
         assert (sz_in >= 0);
-        fprintf(stderr,"tcp cli ubxcli_process_data() call edio24_cli_verify\n");
+        fprintf(stderr,"tcp cli ubxcli_process_data() call ublox_pkt_nexthdr_ubx\n");
 
         ret = ublox_pkt_nexthdr_ubx(buffer_in, sz_in, &sz_processed, &sz_needed_in);
         if (sz_processed > 0) {
@@ -326,6 +326,25 @@ process_command(off_t pos, char * buf, size_t size, void *userdata)
         sscanf(buf + sizeof(CSTR_CUR_COMMAND), "%X %X %X %X %X %X", &u4_1, &u4_2, &u4_3, &u2_1, &class, &id);
         fprintf(stderr, "ublox_pkt_create_unknown_msg1(0x%08X 0x%08X 0x%08X 0x%04X 0x%02X 0x%02X) from '%s'\n", u4_1, u4_2, u4_3, u2_1, class, id, buf + sizeof(CSTR_CUR_COMMAND));
         ret = ublox_pkt_create_unknown_msg1 (buffer1, sizeof(buffer1), u4_1, u4_2, u4_3, u2_1, class, id);
+#undef CSTR_CUR_COMMAND
+
+#define CSTR_CUR_COMMAND "!UBX CFG-MSG"
+    } else if (0 == STRCMP_STATIC (buf, CSTR_CUR_COMMAND)) {
+        int i;
+        char *p;
+        uint8_t buf1[8];
+        memset(buf1, 0, sizeof(buf1));
+        p = buf + sizeof(CSTR_CUR_COMMAND)-1;
+        for (i = 0; i < 8; i ++) {
+            p = strchr(p, ' ');
+            if (NULL != p) {
+                while (*p == ' ') p ++;
+                buf1[i] = atoi(p);
+            } else {
+                break;
+            }
+        }
+        ret = ublox_pkt_create_set_cfgmsg (buffer1, sizeof(buffer1), buf1[0], buf1[1], buf1 + 2, 6);
 #undef CSTR_CUR_COMMAND
 
     }
