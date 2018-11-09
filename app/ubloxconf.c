@@ -142,7 +142,10 @@ ubxcli_process_data (ubloxdata_client_t * ped, uv_stream_t *stream)
             if (sz_processed > 0) {
                 // remove the head of data of size sz_processed
                 size_t sz_rest;
-                assert (sz_processed <= ped->sz_data);
+                //assert (sz_processed <= ped->sz_data);
+                if (sz_processed > ped->sz_data) {
+                    sz_processed = ped->sz_data;
+                }
                 sz_rest = ped->sz_data - sz_processed;
                 if (sz_rest > 0) {
                     memmove (ped->buffer, &(ped->buffer[sz_processed]), sz_rest);
@@ -157,7 +160,7 @@ ubxcli_process_data (ubloxdata_client_t * ped, uv_stream_t *stream)
                 break;
             } else if (ret == 0) {
                 //flg_again = 1;
-                g_ubxcli.num_responds ++;
+                if (g_ubxcli.timeout > 0) g_ubxcli.num_responds ++;
             } else if (ret == 1) {
                 //flg_again = 1;
             } else if (ret == 2) {
@@ -547,6 +550,7 @@ help (char *progname)
     fprintf (stdout, "\nOptions:\n");
     fprintf (stdout, "\t-r\tRemote host and port\n");
     fprintf (stdout, "\t-e <cmd file>\tExecute the command lines in the file\n");
+    fprintf (stdout, "\t-t <timeout>\tThe seconds before quit, 0 - wait forever, default 30\n");
 
     fprintf (stdout, "\t-h\tPrint this message.\n");
     fprintf (stdout, "\t-v\tVerbose information.\n");
@@ -572,19 +576,20 @@ main (int argc, char **argv)
     const char host[200] = "127.0.0.1";
     int port = UBLOX_PORT_DEFAULT;
     const char * fn_execute = NULL;
-    time_t timeout = 0;
+    time_t timeout = 30;
 
     int c;
     struct option longopts[]  = {
         { "remote",       1, 0, 'r' },
         { "execute",      1, 0, 'e' },
+        { "timeout",      1, 0, 't' },
 
         { "help",         0, 0, 'h' },
         { "verbose",      0, 0, 'v' },
         { 0,              0, 0,  0  },
     };
 
-    while ((c = getopt_long( argc, argv, "r:e:vh", longopts, NULL )) != EOF) {
+    while ((c = getopt_long( argc, argv, "r:e:t:vh", longopts, NULL )) != EOF) {
         switch (c) {
         case 'r':
         {
@@ -602,6 +607,10 @@ main (int argc, char **argv)
             if (strlen (optarg) > 0) {
                 fn_execute = optarg;
             }
+            break;
+
+        case 't':
+            timeout = atoi(optarg);
             break;
 
         case 'h':

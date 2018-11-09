@@ -786,6 +786,7 @@ ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, 
         if ((p >= p_end) || (p == 0)) {
             *sz_processed = sz_in;
             *sz_needed_in = UBLOX_PKT_LENGTH_HDR;
+            assert(*sz_processed <= sz_in);
             return 1;
         }
         if (p + 1 >= p_end) {
@@ -793,6 +794,7 @@ ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, 
             *sz_processed = p - buffer_in;
             *sz_needed_in = UBLOX_PKT_LENGTH_HDR - (sz_in - *sz_processed);
             assert ((sz_in - *sz_processed) == 1);
+            assert(*sz_processed <= sz_in);
             return 1;
         }
         if (*(p+1) != 0x62) {
@@ -802,8 +804,10 @@ ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, 
         }
         *sz_processed = p - buffer_in;
         *sz_needed_in = 0;
-        return 0;
+        assert(*sz_processed <= sz_in);
+       return 0;
     }
+    assert(*sz_processed <= sz_in);
     return -1;
 }
 
@@ -934,8 +938,11 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     case UBX_MON_VER:
     {
         char buf[40];
-        fprintf(stderr, "ublox firmware version:\n");
         assert(sizeof(buf)-1 >= 30);
+        fprintf(stderr, "ublox firmware version:\n");
+        if (count <= 0) {
+            break;
+        }
 
 #define LEN_SEG 30
         buf[0] = 0;
@@ -984,7 +991,6 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
 
     case UBX_MON_HW:
     {
-        uint8_t *p;
         uint32_t val32;
         uint16_t val16;
         fprintf(stderr, "ublox hardware version:\n");
@@ -1705,6 +1711,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
             sz = sz_in;
         }
         *sz_processed = sz;
+        assert(*sz_processed <= sz_in);
 
         fprintf(stderr, "ublox error: unsupport command in packet: classid=%s(0x%04X)\n", ublox_val2cstr_classid(buffer_in[2], buffer_in[3]), classid);
         hex_dump_to_fd(STDERR_FILENO, buffer_in, sz_in);
