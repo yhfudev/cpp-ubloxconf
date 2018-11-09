@@ -25,30 +25,31 @@
 
 /*****************************************************************************/
 
-#define UBX_NAV_TIMEGPS  0x0120
-#define UBX_NAV_CLOCK    0x0122
+#define UBX_NAV_TIMEGPS 0x0120
+#define UBX_NAV_CLOCK   0x0122
 
-#define UBX_RXM_RAW  0x0210
-#define UBX_RXM_SFRB 0x0211
+#define UBX_RXM_RAW   0x0210
+#define UBX_RXM_SFRB  0x0211
 #define UBX_RXM_SFRBX 0x0213
-#define UBX_RXM_RAWX 0x0215
+#define UBX_RXM_RAWX  0x0215
 
 #define UBX_TRK_D5    0x030A
 #define UBX_TRK_MEAS  0x0310
 #define UBX_TRK_SFRBX 0x030F
 
+#define UBX_ACK_NAK  0x0500
+#define UBX_ACK_ACK  0x0501
 
-#define UBX_ACK_ACK 0x0501
-#define UBX_ACK_NAK 0x0500
+#define UBX_CFG_PRT  0x0600
+#define UBX_CFG_MSG  0x0601
+#define UBX_CFG_RATE 0x0608
 
-#define UBX_CFG_MSG 0x0601
+#define UBX_DBG_SET  0x0901
 
-#define UBX_UNK_MG1 0x0901
-
-#define UBX_MON_VER 0x0A04
-#define UBX_MON_HW  0x0A09
-#define UBX_MON_HW2 0x0A0B
-#define UBX_MON_RXR 0x0A21
+#define UBX_MON_VER  0x0A04
+#define UBX_MON_HW   0x0A09
+#define UBX_MON_HW2  0x0A0B
+#define UBX_MON_RXR  0x0A21
 
 
 #define UBLOX_PKG_LENGTH(p) ((unsigned int)((p)[4]) | (((unsigned int)((p)[5])) << 8))
@@ -76,7 +77,11 @@ ublox_val2cstr_classid(uint16_t class, uint16_t id)
         UBLOX_V2S(UBX_NAV_TIMEGPS);
         UBLOX_V2S(UBX_NAV_CLOCK);
 
-        UBLOX_V2S(UBX_UNK_MG1);
+        UBLOX_V2S(UBX_CFG_PRT);
+        UBLOX_V2S(UBX_CFG_MSG);
+        UBLOX_V2S(UBX_CFG_RATE);
+
+        UBLOX_V2S(UBX_DBG_SET);
 
         UBLOX_V2S(UBX_TRK_D5);
         UBLOX_V2S(UBX_TRK_MEAS);
@@ -84,6 +89,19 @@ ublox_val2cstr_classid(uint16_t class, uint16_t id)
     }
     return "UNKNOWN_UBX_ID";
 #undef UBLOX_V2S
+}
+
+const char *
+ublox_val2cstr_portid(uint16_t port_id)
+{
+    switch (port_id) {
+    case 0: return "I2C(DDC)"; // Display Data Channel (DDC)
+    case 1: return "UART1";
+    case 2: return "UART2";
+    case 3: return "USB";
+    case 4: return "SPI";
+    }
+    return "UNKNOWN_PORT_ID";
 }
 
 
@@ -365,14 +383,14 @@ TEST_CASE( .name="ublox-version", .description="Test ublox ublox_pkt_create_get_
 
 
 /**
- * \brief fill the buffer with the 'unknown message 1' packet
+ * \brief fill the buffer with the 'DBG-SET' packet
  * \param buffer:   the buffer to be filled
  * \param sz_buf:   the byte size of the buffer
  * \return <0 on fail, >0 the size of packet
  */
-//!UBX UNK-MG1 000016C8 00000000 00216997 0000 02 10
+//!UBX DBG-SET 000016C8 00000000 00216997 0000 02 10
 ssize_t
-ublox_pkt_create_unknown_msg1 (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_t u4_2, uint32_t u4_3, uint16_t u2_1, uint8_t class, uint8_t id)
+ublox_pkt_create_dbg_set (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_t u4_2, uint32_t u4_3, uint16_t u2_1, uint8_t class, uint8_t id)
 {
     ssize_t ret = 0;
 
@@ -398,6 +416,7 @@ ublox_pkt_create_unknown_msg1 (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, ui
 
     // payload
     ret = 6;
+    // little endian
     buffer[ret ++] = u4_1 & 0xFF;
     buffer[ret ++] = (u4_1 >> 8) & 0xFF;
     buffer[ret ++] = (u4_1 >> 16) & 0xFF;
@@ -433,49 +452,6 @@ ublox_pkt_create_unknown_msg1 (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, ui
  * \return <0 on fail, >0 the size of packet
  */
 ssize_t
-ublox_pkt_create_get_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint8_t id)
-{
-    ssize_t ret = 0;
-
-    if (NULL == buffer) {
-        return -1;
-    }
-    if (sz_buf < 8) {
-        return -1;
-    }
-    ret = 8;
-    assert (NULL != buffer);
-
-    // header
-    buffer[0] = 0xB5;
-    buffer[1] = 0x62;
-    // class
-    buffer[2] = 0x06;
-    // ID
-    buffer[3] = 0x01;
-    // length, little endian
-    buffer[4] = 0x02; // 2 bytes
-    buffer[5] = 0x00;
-
-    // payload
-    ret = 6;
-    buffer[ret ++] = class;
-    buffer[ret ++] = id;
-
-    ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
-    ret += 2;
-    assert(ret == 24);
-
-    return ret;
-}
-
-/**
- * \brief fill the buffer with the 'UBX-CFG-MSG' packet
- * \param buffer:   the buffer to be filled
- * \param sz_buf:   the byte size of the buffer
- * \return <0 on fail, >0 the size of packet
- */
-ssize_t
 ublox_pkt_create_set_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint8_t id, uint8_t *rates, int num_rates)
 {
     ssize_t ret = 0;
@@ -502,6 +478,10 @@ ublox_pkt_create_set_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint
     // ID
     buffer[3] = 0x01;
     // length, little endian
+    if (NULL == rates) {
+        num_rates = 0;
+    }
+    assert(num_rates <= 6);
     buffer[4] = 2 + num_rates;
     buffer[5] = 0x00;
 
@@ -509,12 +489,207 @@ ublox_pkt_create_set_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint
     ret = 6;
     buffer[ret ++] = class;
     buffer[ret ++] = id;
-    memmove(buffer + ret, rates, num_rates);
-    ret += num_rates;
+    if (num_rates > 0) {
+        memmove(buffer + ret, rates, num_rates);
+        ret += num_rates;
+    }
 
     ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
     ret += 2;
     assert(ret == 8 + 2 + num_rates);
+
+    return ret;
+}
+
+/**
+ * \brief fill the buffer with the 'UBX-CFG-PRT' packet
+ * \param buffer:   the buffer to be filled
+ * \param sz_buf:   the byte size of the buffer
+ * \param port_id:  the port id, 0xFF - void, 0 - I2C, 1 - UART1, 2 - UART2, 3 - USB, 4 - SPI
+ * \return <0 on fail, >0 the size of packet
+ */
+ssize_t
+ublox_pkt_create_get_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t port_id)
+{
+    ssize_t ret = 0;
+
+    if (NULL == buffer) {
+        return -1;
+    }
+    if (sz_buf < 8) {
+        return -1;
+    }
+    assert (NULL != buffer);
+
+    // header
+    buffer[0] = 0xB5;
+    buffer[1] = 0x62;
+    // class
+    buffer[2] = 0x06;
+    // ID
+    buffer[3] = 0x00;
+
+    ret = 6;
+    // length, little endian
+    if (0xFF == port_id) {
+        buffer[4] = 0x00;
+        buffer[5] = 0x00;
+        // payload
+    } else {
+        if (sz_buf < 9) {
+            // no enough buffer
+            return -1;
+        }
+        buffer[4] = 0x01; // 1 bytes
+        buffer[5] = 0x00;
+        // payload
+        buffer[ret ++] = port_id;
+    }
+
+    ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
+    ret += 2;
+
+    return ret;
+}
+
+ssize_t
+ublox_pkt_create_set_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t port_id, uint16_t txReady, uint32_t mode, uint32_t baudRate, uint16_t inPortoMask, uint16_t outPortoMask)
+{
+    ssize_t ret = 0;
+
+    if (NULL == buffer) {
+        return -1;
+    }
+    if (sz_buf < 8 + 20) {
+        return -1;
+    }
+    assert (NULL != buffer);
+
+    // header
+    buffer[0] = 0xB5;
+    buffer[1] = 0x62;
+    // class
+    buffer[2] = 0x06;
+    // ID
+    buffer[3] = 0x00;
+
+    // length, little endian
+    buffer[4] = 20;
+    buffer[5] = 0x00;
+
+    // payload
+    ret = 6;
+    buffer[ret ++] = port_id;
+    buffer[ret ++] = 0x00; // reserved0
+
+    buffer[ret ++] = txReady & 0xFF;
+    buffer[ret ++] = (txReady >> 8) & 0xFF;
+
+    buffer[ret ++] = mode & 0xFF;
+    buffer[ret ++] = (mode >> 8) & 0xFF;
+    buffer[ret ++] = (mode >> 16) & 0xFF;
+    buffer[ret ++] = (mode >> 24) & 0xFF;
+
+    buffer[ret ++] = baudRate & 0xFF;
+    buffer[ret ++] = (baudRate >> 8) & 0xFF;
+    buffer[ret ++] = (baudRate >> 16) & 0xFF;
+    buffer[ret ++] = (baudRate >> 24) & 0xFF;
+
+    buffer[ret ++] = inPortoMask & 0xFF;
+    buffer[ret ++] = (inPortoMask >> 8) & 0xFF;
+
+    buffer[ret ++] = outPortoMask & 0xFF;
+    buffer[ret ++] = (outPortoMask >> 8) & 0xFF;
+
+    buffer[ret ++] = 0x00; // reserved4
+    buffer[ret ++] = 0x00;
+    buffer[ret ++] = 0x00; // reserved5
+    buffer[ret ++] = 0x00;
+
+    ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
+    ret += 2;
+
+    return ret;
+}
+
+
+/**
+ * \brief fill the buffer with the 'UBX-CFG-RATE' packet
+ * \param buffer:   the buffer to be filled
+ * \param sz_buf:   the byte size of the buffer
+ * \return <0 on fail, >0 the size of packet
+ */
+ssize_t
+ublox_pkt_create_get_cfgrate (uint8_t *buffer, size_t sz_buf)
+{
+    ssize_t ret = 0;
+
+    if (NULL == buffer) {
+        return -1;
+    }
+    if (sz_buf < 8) {
+        return -1;
+    }
+    assert (NULL != buffer);
+
+    // header
+    buffer[0] = 0xB5;
+    buffer[1] = 0x62;
+    // class
+    buffer[2] = 0x06;
+    // ID
+    buffer[3] = 0x08;
+
+    // length, little endian
+    ret = 6;
+    buffer[4] = 0x00;
+    buffer[5] = 0x00;
+
+    ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
+    ret += 2;
+
+    return ret;
+}
+
+ssize_t
+ublox_pkt_create_set_cfgrate (uint8_t *buffer, size_t sz_buf, uint16_t measRate, uint16_t navRate, uint16_t timeRef)
+{
+    ssize_t ret = 0;
+
+    if (NULL == buffer) {
+        return -1;
+    }
+    if (sz_buf < 8 + 20) {
+        return -1;
+    }
+    assert (NULL != buffer);
+
+    // header
+    buffer[0] = 0xB5;
+    buffer[1] = 0x62;
+    // class
+    buffer[2] = 0x06;
+    // ID
+    buffer[3] = 0x08;
+
+    // length, little endian
+    buffer[4] = 6;
+    buffer[5] = 0x00;
+
+    // payload
+    ret = 6;
+
+    buffer[ret ++] = measRate & 0xFF;
+    buffer[ret ++] = (measRate >> 8) & 0xFF;
+
+    buffer[ret ++] = navRate & 0xFF;
+    buffer[ret ++] = (navRate >> 8) & 0xFF;
+
+    buffer[ret ++] = timeRef & 0xFF;
+    buffer[ret ++] = (timeRef >> 8) & 0xFF;
+
+    ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
+    ret += 2;
 
     return ret;
 }
@@ -524,12 +699,12 @@ ublox_pkt_create_set_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint
 
 TEST_CASE( .name="ublox-ext", .description="Test ublox ublox_pkt_create_get_version functions." ) {
     uint8_t buffer[30];
-    SECTION("test ublox ublox_pkt_create_unknown_msg1") {
-        CIUT_LOG ("check ublox_pkt_create_unknown_msg1 %d", 0);
+    SECTION("test ublox ublox_pkt_create_dbg_set") {
+        CIUT_LOG ("check ublox_pkt_create_dbg_set %d", 0);
 
         REQUIRE(sizeof(buffer) > 24);
         //# RAW  b5 62 09 01 10 00 c8 16 00 00 00 00 00 00 97 69 21 00 00 00 02 10 2b 22
-        REQUIRE(24 == ublox_pkt_create_unknown_msg1(buffer, sizeof(buffer), 0x000016C8, 0x00000000, 0x00216997, 0x0000, UBX_RXM_RAW >> 8, UBX_RXM_RAW & 0xFF));
+        REQUIRE(24 == ublox_pkt_create_dbg_set(buffer, sizeof(buffer), 0x000016C8, 0x00000000, 0x00216997, 0x0000, UBX_RXM_RAW >> 8, UBX_RXM_RAW & 0xFF));
         CIUT_LOG("%d RAW buffer:", 0);
         hex_dump_to_fd(STDERR_FILENO, buffer, 24);
         REQUIRE(16 == UBLOX_PKG_LENGTH(buffer));
@@ -538,7 +713,7 @@ TEST_CASE( .name="ublox-ext", .description="Test ublox ublox_pkt_create_get_vers
         REQUIRE(*(buffer + 24-1) == 0x22);
 
         //# SFRB b5 62 09 01 10 00 0c 19 00 00 00 00 00 00 83 69 21 00 00 00 02 11 5f f0
-        REQUIRE(24 == ublox_pkt_create_unknown_msg1(buffer, sizeof(buffer), 0x0000190C, 0x00000000, 0x00216983, 0x0000, UBX_RXM_SFRB >> 8, UBX_RXM_SFRB & 0xFF));
+        REQUIRE(24 == ublox_pkt_create_dbg_set(buffer, sizeof(buffer), 0x0000190C, 0x00000000, 0x00216983, 0x0000, UBX_RXM_SFRB >> 8, UBX_RXM_SFRB & 0xFF));
         CIUT_LOG("%d SFRB buffer:", 0);
         hex_dump_to_fd(STDERR_FILENO, buffer, 24);
         REQUIRE(16 == UBLOX_PKG_LENGTH(buffer));
@@ -555,8 +730,8 @@ TEST_CASE( .name="ublox-ext", .description="Test ublox ublox_pkt_create_get_vers
         unsigned int class;
         unsigned int id;
 
-#define CSTR_CUR_COMMAND "!UBX UNK-MG1"
-        char buf[256] = "!UBX UNK-MG1 000016C8 00000000 00216997 0000 02 10";
+#define CSTR_CUR_COMMAND "!UBX DBG-SET"
+        char buf[256] = "!UBX DBG-SET 000016C8 00000000 00216997 0000 02 10";
         sscanf(buf + sizeof(CSTR_CUR_COMMAND), "%X %X %X %X %X %X", &u4_1, &u4_2, &u4_3, &u2_1, &class, &id);
         fprintf(stderr, "got (0x%08X 0x%08X 0x%08X 0x%04X 0x%02X 0x%02X) from '%s'\n", u4_1, u4_2, u4_3, u2_1, class, id, buf + sizeof(CSTR_CUR_COMMAND));
         REQUIRE(u4_1 == 0x000016C8);
@@ -566,7 +741,7 @@ TEST_CASE( .name="ublox-ext", .description="Test ublox ublox_pkt_create_get_vers
         REQUIRE(class == 0x02);
         REQUIRE(id == 0x10);
 
-        strcpy(buf, "!UBX UNK-MG1 0000190C 00000000 00216983 0000 02 11");
+        strcpy(buf, "!UBX DBG-SET 0000190C 00000000 00216983 0000 02 11");
         sscanf(buf + sizeof(CSTR_CUR_COMMAND), "%x %X %X %X %X %X", &u4_1, &u4_2, &u4_3, &u2_1, &class, &id);
         fprintf(stderr, "got (0x%08X 0x%08X 0x%08X 0x%04X 0x%02X 0x%02X) from '%s'\n", u4_1, u4_2, u4_3, u2_1, class, id, buf + sizeof(CSTR_CUR_COMMAND));
         REQUIRE(u4_1 == 0x0000190C);
@@ -657,7 +832,7 @@ ublox_pkt_expected_size(uint8_t * buffer_in, size_t sz_in)
         sz = 8 + 8 + buffer_in[6+6];
         break;
     case UBX_RXM_SFRB: sz=8+42; break;
-    case UBX_UNK_MG1:  sz=8+16; break;
+    case UBX_DBG_SET:  sz=8+16; break;
     }
 
     return sz;
@@ -706,6 +881,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         *sz_needed_in = 0;
     }
 
+    fprintf(stderr, "+++++++++++++++++++++++++++++++++++++++++++++\n");
     fprintf(stderr,"ublox_cli_verify() begin\n");
     // check the mininal size of packet
     if (NULL == buffer_in) {
@@ -953,13 +1129,13 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     }
         break;
 
-    case UBX_UNK_MG1:
+    case UBX_DBG_SET:
     {
         uint32_t val32;
         uint16_t val16;
         assert(count == 24);
 
-        fprintf(stderr, "ublox !UBX UNK-MG1:\n");
+        fprintf(stderr, "ublox !UBX DBG-SET:\n");
 
         val32 = U32_LE(p);
         fprintf(stderr, "\tX4_1: %08X\n", val32);
@@ -985,6 +1161,144 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
 
     }
         break;
+
+    case UBX_CFG_MSG:
+    {
+        assert(count >= 2);
+
+        if (count == 2) {
+            // query
+            fprintf(stderr, "\t(type): Poll a message configuration\n");
+        } else {
+            fprintf(stderr, "\t(type): Set Message Rate(s)\n");
+        }
+
+        fprintf(stderr, "\tmsgClass: %02X\n", *p);
+        p += 1;
+
+        fprintf(stderr, "\tmsgID: %02X\n", *p);
+        p += 1;
+
+        for (; p - buffer_in - 6 < count; ) {
+            fprintf(stderr, "\trate[%d]: %02X\n", *p);
+            p += 1;
+        }
+
+    }
+        break;
+
+    case UBX_CFG_PRT:
+    {
+        uint32_t val32;
+        uint16_t val16;
+        uint8_t portid;
+        assert(count >= 0);
+        assert(count <= 20);
+
+        if (count == 0) {
+            // query
+            fprintf(stderr, "\t(type): Polls the configuration of the used I/O Port\n");
+            break;
+        } else if (count == 1) {
+            fprintf(stderr, "\t(type): Polls the configuration for one I/O Port\n");
+        } else {
+            fprintf(stderr, "\t(type): Gotten/Set Port Configuration\n");
+        }
+
+        // for UART
+        // U1 portID(=1 or 2), U1 reserved0, X2 txReady, X4 mode, U4 baudRate, X2 inPortoMask, X2 outPortoMask, U2 reserved4, U2 reserved5
+        // for USB
+        // U1 portID(=3), U1 reserved0, X2 txReady, X4 reserved2, U4 reserved3, X2 inPortoMask, X2 outPortoMask, U2 reserved4, U2 reserved5
+        // for SPI
+        // U1 portID(=4), U1 reserved0, X2 txReady, X4 mode, U4 reserved3, X2 inPortoMask, X2 outPortoMask, U2 reserved4, U2 reserved5
+        // for DDC
+        // U1 portID(=0), U1 reserved0, X2 txReady, X4 mode, U4 reserved3, X2 inPortoMask, X2 outPortoMask, U2 reserved4, U2 reserved5
+
+        portid = *p;
+        fprintf(stderr, "\tPortID: %s (0x%02X)\n", ublox_val2cstr_portid(*p), *p);
+        p += 1;
+
+        if (count == 1) {
+            break;
+        }
+        assert(count == 20);
+
+        fprintf(stderr, "\treserved0: %02X\n", *p);
+        p += 1;
+
+        val16 = U16_LE(p);
+        fprintf(stderr, "\ttxReady: %04X\n", val16);
+        p += 2;
+
+        if (portid == 3) {
+            // usb
+            val32 = U32_LE(p);
+            fprintf(stderr, "\treserved2: %08X\n", val32);
+            p += 4;
+        } else {
+            val32 = U32_LE(p);
+            fprintf(stderr, "\tmode: %08X\n", val32);
+            p += 4;
+        }
+        if (portid == 1 || portid == 2) {
+            // UART
+            val32 = U32_LE(p);
+            fprintf(stderr, "\tbaudRate: %d(0x%08X)\n", val32, val32);
+            p += 4;
+        } else {
+            val32 = U32_LE(p);
+            fprintf(stderr, "\treserved3: %08X\n", val32);
+            p += 4;
+        }
+
+        val16 = U16_LE(p);
+        fprintf(stderr, "\tinPortoMask: %04X\n", val16);
+        p += 2;
+
+        val16 = U16_LE(p);
+        fprintf(stderr, "\toutPortoMask: %04X\n", val16);
+        p += 2;
+
+        val16 = U16_LE(p);
+        fprintf(stderr, "\treserved4: %04X\n", val16);
+        p += 2;
+
+        val16 = U16_LE(p);
+        fprintf(stderr, "\treserved5: %04X\n", val16);
+        p += 2;
+
+    }
+        break;
+
+    case UBX_CFG_RATE:
+    {
+        uint16_t val16;
+        assert(count >= 0);
+        assert(count <= 6);
+
+        if (count == 0) {
+            // query
+            fprintf(stderr, "\t(type): Poll Navigation/Measurement Rate Settings\n");
+            break;
+        } else {
+            fprintf(stderr, "\t(type): Navigation/Measurement Rate Settings\n");
+        }
+
+        val16 = U16_LE(p);
+        fprintf(stderr, "\tmeasRate: %d(0x%04X)\n", val16, val16);
+        p += 2;
+
+        val16 = U16_LE(p);
+        fprintf(stderr, "\tnavRate: %d(0x%04X)\n", val16, val16);
+        p += 2;
+
+        val16 = U16_LE(p);
+        fprintf(stderr, "\ttimeRef: %d(0x%04X)\n", val16, val16);
+        p += 2;
+
+    }
+        break;
+
 
     case UBX_NAV_TIMEGPS:
     {
@@ -1121,6 +1435,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         }
     }
         break;
+
     case UBX_RXM_SFRB:
     {
         uint32_t val32;
@@ -1139,6 +1454,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         }
     }
         break;
+
     case UBX_RXM_SFRBX: // ublox8
     {
         int numWords;
@@ -1312,14 +1628,14 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
 
 #define MINPRNSBS   120                 /* min satellite PRN number of SBAS */
             if (type == 6) {
-                fprintf(stderr, "\t\tgnss=%s\n", ublox_val2cstr_gnss(*(p+56)));
-                fprintf(stderr, "\t\tprn=%d\n", (*(p+57)));
-                fprintf(stderr, "\t\tfrq=%d\n", (*(p+59)));
+                fprintf(stderr, "\t\tgnssId=%s\n", ublox_val2cstr_gnss(*(p+56)));
+                fprintf(stderr, "\t\tsvId=%d\n", (*(p+57)));
+                fprintf(stderr, "\t\tfreqId=%d\n", (*(p+59)));
             } else {
-                int prn;
-                prn = *(p+34);
-                fprintf(stderr, "\t\tgnss=%s\n", ublox_val2cstr_gnss((prn<MINPRNSBS)?0/*GPS*/:1/*SBS*/));
-                fprintf(stderr, "\t\tprn=%d\n", (*(p+34)));
+                int svId;
+                svId = *(p+34);
+                fprintf(stderr, "\t\tgnssId=%s\n", ublox_val2cstr_gnss((svId<MINPRNSBS)?0/*GPS*/:1/*SBS*/));
+                fprintf(stderr, "\t\tsvId=%d\n", (*(p+34)));
             }
             fprintf(stderr, "\t\tflags=%02X\n", (*(p+54)));
 
@@ -1396,6 +1712,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         return 2;
         break;
     }
+    fprintf(stderr, "+++++++++++++++++++++++++++++++++++++++++++++\n");
 
     assert (NULL != sz_processed);
     *sz_processed = UBLOX_PKT_LENGTH_MIN + count;

@@ -80,10 +80,14 @@ ssize_t ublox_pkt_create_get_version (uint8_t *buffer, size_t sz_buf);
 ssize_t ublox_pkt_create_get_hw (uint8_t *buffer, size_t sz_buf);
 ssize_t ublox_pkt_create_get_hw2 (uint8_t *buffer, size_t sz_buf);
 
-ssize_t ublox_pkt_create_get_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint8_t id);
 ssize_t ublox_pkt_create_set_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint8_t id, uint8_t *rates, int num_rate);
+ssize_t ublox_pkt_create_get_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t port_id);
+ssize_t ublox_pkt_create_set_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t port_id, uint16_t txReady, uint32_t mode, uint32_t baudRate, uint16_t inPortoMask, uint16_t outPortoMask);
 
-ssize_t ublox_pkt_create_unknown_msg1 (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_t u4_2, uint32_t u4_3, uint16_t u2_1, uint8_t class, uint8_t id);
+ssize_t ublox_pkt_create_get_cfgrate (uint8_t *buffer, size_t sz_buf);
+ssize_t ublox_pkt_create_set_cfgrate (uint8_t *buffer, size_t sz_buf, uint16_t measRate, uint16_t navRate, uint16_t timeRef);
+
+ssize_t ublox_pkt_create_dbg_set (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_t u4_2, uint32_t u4_3, uint16_t u2_1, uint8_t class, uint8_t id);
 
 int ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, size_t * sz_needed_in);
 int ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, size_t * sz_needed_in);

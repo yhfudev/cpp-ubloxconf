@@ -314,7 +314,7 @@ process_command(off_t pos, char * buf, size_t size, void *userdata)
         ret = ublox_pkt_create_get_hw2 (buffer1, sizeof(buffer1));
 #undef CSTR_CUR_COMMAND
 
-#define CSTR_CUR_COMMAND "!UBX UNK-MG1"
+#define CSTR_CUR_COMMAND "!UBX DBG-SET"
     } else if (0 == STRCMP_STATIC (buf, CSTR_CUR_COMMAND)) {
         unsigned int u4_1;
         unsigned int u4_2;
@@ -325,7 +325,7 @@ process_command(off_t pos, char * buf, size_t size, void *userdata)
 
         sscanf(buf + sizeof(CSTR_CUR_COMMAND), "%X %X %X %X %X %X", &u4_1, &u4_2, &u4_3, &u2_1, &class, &id);
         fprintf(stderr, "ublox_pkt_create_unknown_msg1(0x%08X 0x%08X 0x%08X 0x%04X 0x%02X 0x%02X) from '%s'\n", u4_1, u4_2, u4_3, u2_1, class, id, buf + sizeof(CSTR_CUR_COMMAND));
-        ret = ublox_pkt_create_unknown_msg1 (buffer1, sizeof(buffer1), u4_1, u4_2, u4_3, u2_1, class, id);
+        ret = ublox_pkt_create_dbg_set (buffer1, sizeof(buffer1), u4_1, u4_2, u4_3, u2_1, class, id);
 #undef CSTR_CUR_COMMAND
 
 #define CSTR_CUR_COMMAND "!UBX CFG-MSG"
@@ -344,7 +344,71 @@ process_command(off_t pos, char * buf, size_t size, void *userdata)
                 break;
             }
         }
+        if (i < 8) {
+            // get conf
+            i = 0;
+        }
         ret = ublox_pkt_create_set_cfgmsg (buffer1, sizeof(buffer1), buf1[0], buf1[1], buf1 + 2, 6);
+#undef CSTR_CUR_COMMAND
+
+#define CSTR_CUR_COMMAND "!UBX CFG-PRT"
+    } else if (0 == STRCMP_STATIC (buf, CSTR_CUR_COMMAND)) {
+        unsigned int portID = 0xFF;
+
+        int i;
+        char *p;
+
+        p = buf + sizeof(CSTR_CUR_COMMAND)-1;
+        for (i = 0; i < 6; i ++) {
+            p = strchr(p, ' ');
+            if (NULL != p) {
+                while (*p == ' ') p ++;
+            } else {
+                break;
+            }
+            if (portID == 0xFF) {
+                portID = atoi(p);
+            }
+        }
+        if (i < 6) {
+            // get conf
+            ret = ublox_pkt_create_get_cfgprt(buffer1, sizeof(buffer1), portID);
+        } else {
+            unsigned int txReady;
+            unsigned int mode;
+            unsigned int baudRate;
+            unsigned int inProtoMask;
+            unsigned int outProtoMask;
+            unsigned int reserved;
+            sscanf(buf + sizeof(CSTR_CUR_COMMAND), "%X %X %X %X %X %X", &portID, &txReady, &mode, &baudRate, &inProtoMask, &outProtoMask);
+            ret = ublox_pkt_create_set_cfgprt (buffer1, sizeof(buffer1), portID, txReady, mode, baudRate, inProtoMask, outProtoMask);
+        }
+#undef CSTR_CUR_COMMAND
+
+#define CSTR_CUR_COMMAND "!UBX CFG-RATE"
+    } else if (0 == STRCMP_STATIC (buf, CSTR_CUR_COMMAND)) {
+        int i;
+        char *p;
+
+        p = buf + sizeof(CSTR_CUR_COMMAND)-1;
+        for (i = 0; i < 3; i ++) {
+            p = strchr(p, ' ');
+            if (NULL != p) {
+                while (*p == ' ') p ++;
+            } else {
+                break;
+            }
+        }
+        if (i < 3) {
+            // get conf
+            ret = ublox_pkt_create_get_cfgrate(buffer1, sizeof(buffer1));
+        } else {
+            unsigned int measRate;
+            unsigned int navRate;
+            unsigned int timeRef;
+            sscanf(buf + sizeof(CSTR_CUR_COMMAND), "%X %X %X", &measRate, &navRate, &timeRef);
+            ret = ublox_pkt_create_set_cfgrate (buffer1, sizeof(buffer1), measRate, navRate, timeRef);
+        }
 #undef CSTR_CUR_COMMAND
 
     }
@@ -352,8 +416,15 @@ process_command(off_t pos, char * buf, size_t size, void *userdata)
         fprintf(stderr, "tcp cli ignore line at pos(%ld): %s\n", pos, buf);
         return 0;
     }
+    fprintf(stderr, "---------------------------------------------\n");
     fprintf(stderr, "tcp cli created packet size=%" PRIiSZ ":\n", ret);
     hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), ret);
+    {
+        size_t sz_processed;
+        size_t sz_needed_in;
+        ublox_cli_verify_tcp(buffer1, ret, &sz_processed, &sz_needed_in);
+    }
+    fprintf(stderr, "---------------------------------------------\n");
     assert (ret <= sizeof(buffer1));
     send_buffer(stream, buffer1, ret);
     g_ubxcli.num_requests ++;
