@@ -1139,7 +1139,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     {
         uint32_t val32;
         uint16_t val16;
-        assert(count == 24);
+        assert(count == 16);
 
         fprintf(stderr, "ublox !UBX DBG-SET:\n");
 
