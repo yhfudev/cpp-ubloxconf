@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.61])
-AC_INIT([gpsutils], [1.0.0], [yhfudev@gmail.com])
+AC_INIT([ubloxconf], [0.1.0], [yhfudev@gmail.com])
 AC_CONFIG_SRCDIR([app/ubloxconf.c])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE(-Wall subdir-objects parallel-tests color-tests)

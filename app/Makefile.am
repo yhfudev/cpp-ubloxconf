@@ -49,6 +49,7 @@ include_HEADERS = \
     $(NULL)
 
 noinst_HEADERS= \
+    utils.h \
     $(NULL)
 
 ubloxconf_SOURCES= \
