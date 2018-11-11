@@ -280,45 +280,214 @@ send_buffer(uv_stream_t* stream, uint8_t *buffer1, size_t szbuf)
 
 #define STRCMP_STATIC(buf, static_str) strncmp(buf, static_str, sizeof(static_str)-1)
 
-/**
- * \brief parse the lines in the buffer and send out packets base on the command
- * \param pos: the position in the file
- * \param buf: the buffer
- * \param size: the size of buffer
- * \param userdata: the pointer passed by the user
- *
- * \return 0 on successs, <0 on error
- *
- * TODO: add command 'sleep' to support delay between commands.
- */
+typedef struct _cstr_val_t {
+    const char * cstr;
+    uint8_t      val;
+} cstr_val_t;
+
+typedef struct _record_cstr_val_t{
+    cstr_val_t * cstrval;
+    size_t sz_val;
+} record_cstr_val_t;
+
+/*"data_list[idx] - *data_pin"*/
 int
-process_command(off_t pos, char * buf, size_t size, void *userdata)
+pf_bsearch_cb_comp_cstrval(void *userdata, size_t idx, void * data_pin)
 {
-    uv_stream_t* stream = (uv_stream_t *)userdata;
+    cstr_val_t * data = (cstr_val_t *)userdata;
+    return (strcmp(data[idx].cstr, (char *)data_pin));
+}
+
+int
+ublox_classid_cstr2val(char * buf, size_t size, uint8_t * p_class, uint8_t *p_id)
+{
+    cstr_val_t list_id_mon[] = {
+        {"HW", 0x09},
+        {"HW2", 0x0B},
+        {"IO", 0x02}, //
+        {"MSGPP", 0x06}, //
+        {"RXBUF", 0x07}, //
+        {"RXR", 0x21}, //
+        {"TXBUF", 0x08}, //
+        {"VER", 0x04},
+    };
+    cstr_val_t list_id_cfg[] = {
+        {"ANT", 0x13},
+        {"CFG", 0x09},
+        {"DAT", 0x06},
+        {"EKF", 0x12}, //
+        {"ESFGWT", 0x29}, //
+        {"FXN", 0x0E},
+        {"INF", 0x02},
+        {"ITFM", 0x39}, //
+        {"MSG", 0x01},
+        {"NAV5", 0x24},
+        {"NAVX5", 0x23},
+        {"NMEA", 0x17},
+        {"NVS", 0x22}, //
+        {"PM", 0x32},
+        {"PM2", 0x3B}, //
+        {"PRT", 0x00},
+        {"RATE", 0x08},
+        {"RINV", 0x34},
+        {"RXM", 0x11},
+        {"SBAS", 0x16},
+        {"TMODE", 0x1D}, //
+        {"TMODE2", 0x3D}, //
+        {"TP", 0x07},
+        {"TP5", 0x31},
+        {"USB", 0x1B},
+    };
+
+    cstr_val_t list_class[] = {
+        {"CFG", 0x06},
+        {"MON", 0x0A},
+    };
+    record_cstr_val_t ublox_class_id[] = {
+        { &list_id_cfg, NUM_ARRAY(list_id_cfg), },
+        { &list_id_mon, NUM_ARRAY(list_id_mon), },
+    };
+
+    char buffer[20];
+    char *p = buf;
+    size_t idx1;
+    size_t idx2;
+
+    assert (NUM_ARRAY(list_class) == NUM_ARRAY(ublox_class_id));
+    assert (p_class);
+    assert (p_id);
+
+    // split the string
+    p = strchr(buf, '-');
+    if ((NULL == p) || (buf + size <= p)) {
+        // not found
+        fprintf(stderr, "warning: not found UBX class-id separator\n");
+        return -1;
+    }
+    memset(buffer, 0, sizeof(buffer));
+    strncpy(buffer, buf, size);
+    p = (buffer + (p - buf));
+    *p = 0;
+
+    if (0 > pf_bsearch_r (list_class, NUM_ARRAY(list_class), pf_bsearch_cb_comp_cstrval, buffer, &idx1)) {
+        // not found
+        fprintf(stderr, "warning: not found UBX class '%s'\n", buffer);
+        return -1;
+    }
+    *p_class = list_class[idx1].val;
+    if (0 > pf_bsearch_r (ublox_class_id[idx1].cstrval, ublox_class_id[idx1].sz_val, pf_bsearch_cb_comp_cstrval, p+1, &idx2)) {
+        // not found
+        fprintf(stderr, "warning: not found UBX class '%s', id '%s'\n", buffer, p+1);
+        return -1;
+    }
+    *p_id = ublox_class_id[idx1].cstrval[idx2].val;
+    return 0;
+}
+
+/**
+ * \brief process a line and output the binary to buffer for U-Blox config file
+ * \param buf_in: the input buffer
+ * \param sz_bufin: the size of input buffer
+ * \param buf_out: the output buffer
+ * \param sz_bufout: the size of output buffer
+ *
+ * \return >=0 on successs, <0 on error(the command is not recognized)
+ *
+ */
+ssize_t
+process_command_line_buf_ubloxhex(char * buf, size_t size, uint8_t * buf_out, size_t sz_bufout)
+{
+    uint8_t class;
+    uint8_t id;
+    uint16_t len;
+    char *p = buf;
+    char *p_end = NULL;
+    int i;
+    char buffer[20];
+    unsigned int val;
+
+    // find the " - "
+    p_end = strstr(buf, " - ");
+    if (NULL == p_end) {
+        return -1;
+    }
+    assert (sizeof(buffer) > (p_end - buf));
+    memset(buffer, 0, sizeof(buffer));
+    strncpy(buffer, buf, (p_end - buf));
+
+    if (0 > ublox_classid_cstr2val(buffer, (p_end - buf), &class, &id)) {
+        // not found
+        fprintf(stderr, "not found class: '%s'\n", buffer);
+        return -1;
+    }
+
+    if (sz_bufout < 8) {
+        fprintf(stderr, "output buffer size too small: '%d'\n", sz_bufout);
+        return -2;
+    }
+    buf_out[0] = 0xB5;
+    buf_out[1] = 0x62;
+    p = p_end + 2;
+    for (i = 2; ; i ++) {
+        p = strchr(p, ' ');
+        if (NULL == p) {
+            break;
+        }
+        p ++;
+        if (sscanf(p, "%x", &val) <= 0) {
+            break;
+        }
+        if (sz_bufout < i) {
+            fprintf(stderr, "output buffer size too small: '%d' at pos=%d\n", sz_bufout, i);
+            return -2;
+        }
+        // got value
+        buf_out[i] = val & 0xFF;
+    }
+    assert (i >= 8);
+    // check the class,id,length
+    len = (((unsigned int)buf_out[5]) << 8) | buf_out[4];
+
+    assert (len + 2 + 4 == i);
+    assert (class == buf_out[2]);
+    assert (id == buf_out[3]);
+
+    ublox_pkt_checksum(buf_out + 2, i - 2, buf_out + i);
+    i += 2;
+
+    return i;
+}
+
+/**
+ * \brief process a line and output the binary to buffer for RTKLIB's ublox config file
+ * \param buf_in: the input buffer
+ * \param sz_bufin: the size of input buffer
+ * \param buf_out: the output buffer
+ * \param sz_bufout: the size of output buffer
+ *
+ * \return >=0 on successs, <0 on error(the command is not recognized)
+ *
+ */
+ssize_t
+process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, size_t sz_bufout)
+{
     ssize_t ret = -1;
-    uint8_t buffer1[100];
-    uint8_t buffer2[100];
-    uint32_t address = 0xFF;
-    ssize_t count = sizeof(buffer2);
-    char * endptr = NULL;
 
-    fprintf(stderr, "ubxcli process line: '%s'\n", buf);
-
-    if (0 == STRCMP_STATIC (buf, "!UBX MON-VER")) {
-        ret = ublox_pkt_create_get_version (buffer1, sizeof(buffer1));
+    if (0 == STRCMP_STATIC (buf_in, "!UBX MON-VER")) {
+        ret = ublox_pkt_create_get_version (buf_out, sz_bufout);
 
 #define CSTR_CUR_COMMAND "!UBX MON-HW"
-    } else if (0 == STRCMP_STATIC (buf, CSTR_CUR_COMMAND)) {
-        ret = ublox_pkt_create_get_hw (buffer1, sizeof(buffer1));
+    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
+        ret = ublox_pkt_create_get_hw (buf_out, sz_bufout);
 #undef CSTR_CUR_COMMAND
 
 #define CSTR_CUR_COMMAND "!UBX MON-HW2"
-    } else if (0 == STRCMP_STATIC (buf, CSTR_CUR_COMMAND)) {
-        ret = ublox_pkt_create_get_hw2 (buffer1, sizeof(buffer1));
+    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
+        ret = ublox_pkt_create_get_hw2 (buf_out, sz_bufout);
 #undef CSTR_CUR_COMMAND
 
 #define CSTR_CUR_COMMAND "!UBX DBG-SET"
-    } else if (0 == STRCMP_STATIC (buf, CSTR_CUR_COMMAND)) {
+    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
         unsigned int u4_1;
         unsigned int u4_2;
         unsigned int u4_3;
@@ -326,18 +495,18 @@ process_command(off_t pos, char * buf, size_t size, void *userdata)
         unsigned int class;
         unsigned int id;
 
-        sscanf(buf + sizeof(CSTR_CUR_COMMAND), "%X %X %X %X %X %X", &u4_1, &u4_2, &u4_3, &u2_1, &class, &id);
-        fprintf(stderr, "ublox_pkt_create_unknown_msg1(0x%08X 0x%08X 0x%08X 0x%04X 0x%02X 0x%02X) from '%s'\n", u4_1, u4_2, u4_3, u2_1, class, id, buf + sizeof(CSTR_CUR_COMMAND));
-        ret = ublox_pkt_create_dbg_set (buffer1, sizeof(buffer1), u4_1, u4_2, u4_3, u2_1, class, id);
+        sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%X %X %X %X %X %X", &u4_1, &u4_2, &u4_3, &u2_1, &class, &id);
+        fprintf(stderr, "ublox_pkt_create_unknown_msg1(0x%08X 0x%08X 0x%08X 0x%04X 0x%02X 0x%02X) from '%s'\n", u4_1, u4_2, u4_3, u2_1, class, id, buf_in + sizeof(CSTR_CUR_COMMAND));
+        ret = ublox_pkt_create_dbg_set (buf_out, sz_bufout, u4_1, u4_2, u4_3, u2_1, class, id);
 #undef CSTR_CUR_COMMAND
 
 #define CSTR_CUR_COMMAND "!UBX CFG-MSG"
-    } else if (0 == STRCMP_STATIC (buf, CSTR_CUR_COMMAND)) {
+    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
         int i;
         char *p;
         uint8_t buf1[8];
         memset(buf1, 0, sizeof(buf1));
-        p = buf + sizeof(CSTR_CUR_COMMAND)-1;
+        p = buf_in + sizeof(CSTR_CUR_COMMAND)-1;
         for (i = 0; i < 8; i ++) {
             p = strchr(p, ' ');
             if (NULL != p) {
@@ -351,17 +520,17 @@ process_command(off_t pos, char * buf, size_t size, void *userdata)
             // get conf
             i = 0;
         }
-        ret = ublox_pkt_create_set_cfgmsg (buffer1, sizeof(buffer1), buf1[0], buf1[1], buf1 + 2, 6);
+        ret = ublox_pkt_create_set_cfgmsg (buf_out, sz_bufout, buf1[0], buf1[1], buf1 + 2, 6);
 #undef CSTR_CUR_COMMAND
 
 #define CSTR_CUR_COMMAND "!UBX CFG-PRT"
-    } else if (0 == STRCMP_STATIC (buf, CSTR_CUR_COMMAND)) {
+    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
         unsigned int portID = 0xFF;
 
         int i;
         char *p;
 
-        p = buf + sizeof(CSTR_CUR_COMMAND)-1;
+        p = buf_in + sizeof(CSTR_CUR_COMMAND)-1;
         for (i = 0; i < 6; i ++) {
             p = strchr(p, ' ');
             if (NULL != p) {
@@ -375,7 +544,7 @@ process_command(off_t pos, char * buf, size_t size, void *userdata)
         }
         if (i < 6) {
             // get conf
-            ret = ublox_pkt_create_get_cfgprt(buffer1, sizeof(buffer1), portID);
+            ret = ublox_pkt_create_get_cfgprt(buf_out, sz_bufout, portID);
         } else {
             unsigned int txReady;
             unsigned int mode;
@@ -383,17 +552,17 @@ process_command(off_t pos, char * buf, size_t size, void *userdata)
             unsigned int inProtoMask;
             unsigned int outProtoMask;
             unsigned int reserved;
-            sscanf(buf + sizeof(CSTR_CUR_COMMAND), "%X %X %X %X %X %X", &portID, &txReady, &mode, &baudRate, &inProtoMask, &outProtoMask);
-            ret = ublox_pkt_create_set_cfgprt (buffer1, sizeof(buffer1), portID, txReady, mode, baudRate, inProtoMask, outProtoMask);
+            sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%X %X %X %X %X %X", &portID, &txReady, &mode, &baudRate, &inProtoMask, &outProtoMask);
+            ret = ublox_pkt_create_set_cfgprt (buf_out, sz_bufout, portID, txReady, mode, baudRate, inProtoMask, outProtoMask);
         }
 #undef CSTR_CUR_COMMAND
 
 #define CSTR_CUR_COMMAND "!UBX CFG-RATE"
-    } else if (0 == STRCMP_STATIC (buf, CSTR_CUR_COMMAND)) {
+    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
         int i;
         char *p;
 
-        p = buf + sizeof(CSTR_CUR_COMMAND)-1;
+        p = buf_in + sizeof(CSTR_CUR_COMMAND)-1;
         for (i = 0; i < 3; i ++) {
             p = strchr(p, ' ');
             if (NULL != p) {
@@ -404,21 +573,49 @@ process_command(off_t pos, char * buf, size_t size, void *userdata)
         }
         if (i < 3) {
             // get conf
-            ret = ublox_pkt_create_get_cfgrate(buffer1, sizeof(buffer1));
+            ret = ublox_pkt_create_get_cfgrate(buf_out, sz_bufout);
         } else {
             unsigned int measRate;
             unsigned int navRate;
             unsigned int timeRef;
-            sscanf(buf + sizeof(CSTR_CUR_COMMAND), "%X %X %X", &measRate, &navRate, &timeRef);
-            ret = ublox_pkt_create_set_cfgrate (buffer1, sizeof(buffer1), measRate, navRate, timeRef);
+            sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%X %X %X", &measRate, &navRate, &timeRef);
+            ret = ublox_pkt_create_set_cfgrate (buf_out, sz_bufout, measRate, navRate, timeRef);
         }
 #undef CSTR_CUR_COMMAND
+    }
+    return ret;
+}
 
+/**
+ * \brief parse the lines in the buffer and send out packets base on the command
+ * \param pos: the position in the file
+ * \param buf: the buffer
+ * \param size: the size of buffer
+ * \param userdata: the pointer passed by the user
+ *
+ * \return 0 on successs, <0 on error
+ *
+ * TODO: add command 'sleep' to support delay between commands.
+ */
+int
+process_command_libuv(off_t pos, char * buf, size_t size, void *userdata)
+{
+    uv_stream_t* stream = (uv_stream_t *)userdata;
+
+    ssize_t ret = -1;
+    uint8_t buffer1[200];
+
+    fprintf(stderr, "ubxcli process line: '%s'\n", buf);
+
+    ret = process_command_line_buf_rtklibarg(buf, size, buffer1, sizeof(buffer1));
+    if (ret < 0) {
+        ret = process_command_line_buf_ubloxhex(buf, size, buffer1, sizeof(buffer1));
     }
     if (ret < 0) {
         fprintf(stderr, "tcp cli ignore line at pos(%ld): %s\n", pos, buf);
         return 0;
     }
+#if DEBUG
     fprintf(stderr, "---------------------------------------------\n");
     fprintf(stderr, "tcp cli created packet size=%" PRIiSZ ":\n", ret);
     hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), ret);
@@ -429,8 +626,11 @@ process_command(off_t pos, char * buf, size_t size, void *userdata)
     }
     fprintf(stderr, "---------------------------------------------\n");
     assert (ret <= sizeof(buffer1));
+#endif
+
     send_buffer(stream, buffer1, ret);
     g_ubxcli.num_requests ++;
+
     return 0;
 }
 
@@ -441,7 +641,7 @@ on_tcp_cli_connect(uv_connect_t* connection, int status)
 
     fprintf(stderr, "tcp cli connected.\n");
 
-    read_file_lines (g_ubxcli.fn_execute, (void *)stream, process_command);
+    read_file_lines (g_ubxcli.fn_execute, (void *)stream, process_command_libuv);
     uv_read_start(stream, alloc_buffer, on_tcp_cli_read);
 }
 
@@ -533,6 +733,47 @@ main_cli(const char * host, int port_tcp, time_t timeout, const char * fn_execut
 }
 
 /*****************************************************************************/
+/**
+ * \brief parse the lines in the buffer and send out packets base on the command
+ * \param pos: the position in the file
+ * \param buf: the buffer
+ * \param size: the size of buffer
+ * \param userdata: the pointer passed by the user
+ *
+ * \return 0 on successs, <0 on error
+ *
+ * TODO: add command 'sleep' to support delay between commands.
+ */
+int
+process_command_stdout(off_t pos, char * buf, size_t size, void *userdata)
+{
+    FILE *fp = (FILE *)userdata;
+    ssize_t ret = -1;
+    uint8_t buffer1[200];
+
+    fprintf(stderr, "ubxcli process line: '%s'\n", buf);
+
+    ret = process_command_line_buf_rtklibarg(buf, size, buffer1, sizeof(buffer1));
+    if (ret < 0) {
+        ret = process_command_line_buf_ubloxhex(buf, size, buffer1, sizeof(buffer1));
+    }
+    if (ret < 0) {
+        fprintf(stderr, "tcp cli ignore line at pos(%ld): %s\n", pos, buf);
+        return 0;
+    }
+    fprintf(stderr, "---------------------------------------------\n");
+    fprintf(stderr, "tcp cli created packet size=%" PRIiSZ ":\n", ret);
+    hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), ret);
+    {
+        size_t sz_processed;
+        size_t sz_needed_in;
+        ublox_cli_verify_tcp(buffer1, ret, &sz_processed, &sz_needed_in);
+    }
+    fprintf(stderr, "---------------------------------------------\n");
+    return 0;
+}
+
+/*****************************************************************************/
 void
 version (void)
 {
@@ -569,11 +810,10 @@ usage (char *progname)
     help (progname);
 }
 
-
 int
 main (int argc, char **argv)
 {
-    const char host[200] = "127.0.0.1";
+    const char host[200] = "";
     int port = UBLOX_PORT_DEFAULT;
     const char * fn_execute = NULL;
     time_t timeout = 30;
@@ -628,6 +868,13 @@ main (int argc, char **argv)
         }
     }
 
+    if (strlen(host) < 1) {
+        if (fn_execute) {
+            // parse the execute file
+            read_file_lines (fn_execute, (void *)stdout, process_command_stdout);
+        }
+        return 0;
+    }
     return main_cli(host, port, timeout, fn_execute);
 }
 

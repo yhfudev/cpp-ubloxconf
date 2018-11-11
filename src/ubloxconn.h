@@ -10,7 +10,7 @@
 #ifndef UBLOX_CONN_H
 #define UBLOX_CONN_H
 
-#define DEBUG 0
+#define DEBUG 1
 
 
 #include <stdlib.h>    /* size_t */
@@ -73,6 +73,7 @@ extern "C" {
 #define UBLOX_CLASS_AID 0x0B
 #define UBLOX_CLASS_ESF 0x10
 
+void ublox_pkt_checksum(void *buffer, int length, char * out_buf);
 int ublox_pkt_verify (uint8_t *buffer, size_t sz_buf);
 
 // create a packet

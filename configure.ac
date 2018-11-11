@@ -23,6 +23,7 @@ AC_PROG_CXX(clang++ llvm-g++ g++)
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_PROG_MAKE_SET
+AM_PROG_AR
 
 # Checks for libraries.
 LT_PREREQ([2.2])

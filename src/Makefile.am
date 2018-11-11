@@ -1,6 +1,7 @@
 
 AM_LDFLAGS=
 AM_CFLAGS=
+EXTRA_DIST=
 
 DEFS+= \
     -Isrc \
@@ -43,6 +44,14 @@ include_HEADERS = \
 
 noinst_HEADERS= \
     $(NULL)
+
+EXTRA_DIST += \
+    libgpsutils.pc.in \
+    $(NULL)
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = libgpsutils.pc
+
 
 lib_LTLIBRARIES=libgpsutils.la
 
