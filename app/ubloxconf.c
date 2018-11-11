@@ -313,6 +313,7 @@ ublox_classid_cstr2val(char * buf, size_t size, uint8_t * p_class, uint8_t *p_id
     };
     cstr_val_t list_id_cfg[] = {
         {"ANT", 0x13},
+        {"BDS", 0x4A},
         {"CFG", 0x09},
         {"DAT", 0x06},
         {"EKF", 0x12}, //
@@ -338,13 +339,18 @@ ublox_classid_cstr2val(char * buf, size_t size, uint8_t * p_class, uint8_t *p_id
         {"TP5", 0x31},
         {"USB", 0x1B},
     };
+    cstr_val_t list_id_dbg[] = {
+        {"SET", 0x01},
+    };
 
     cstr_val_t list_class[] = {
         {"CFG", 0x06},
+        {"DBG", 0x09},
         {"MON", 0x0A},
     };
     record_cstr_val_t ublox_class_id[] = {
         { &list_id_cfg, NUM_ARRAY(list_id_cfg), },
+        { &list_id_dbg, NUM_ARRAY(list_id_dbg), },
         { &list_id_mon, NUM_ARRAY(list_id_mon), },
     };
 
@@ -472,22 +478,43 @@ ssize_t
 process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, size_t sz_bufout)
 {
     ssize_t ret = -1;
+    uint8_t class;
+    uint8_t id;
+    char *p_end = NULL;
+    char buf_prefix[20];
 
-    if (0 == STRCMP_STATIC (buf_in, "!UBX MON-VER")) {
+#define CSTR_CUR_COMMAND "!UBX"
+    if (0 != STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
+        // not a rtklib ubx command
+        return -1;
+    }
+    // find the " "
+    p_end = strchr(buf_in + sizeof(CSTR_CUR_COMMAND), ' ');
+    if (NULL == p_end) {
+        return -1;
+    }
+
+    memset(buf_prefix, 0, sizeof(buf_prefix));
+    strncpy(buf_prefix, buf_in + sizeof(CSTR_CUR_COMMAND), p_end - buf_in - sizeof(CSTR_CUR_COMMAND));
+#undef CSTR_CUR_COMMAND
+
+    if (0 > ublox_classid_cstr2val(buf_prefix, strlen(buf_prefix), &class, &id)) {
+        // not found
+        fprintf(stderr, "not found class: '%s'\n", buf_prefix);
+        return -1;
+    }
+    switch (UBLOX_CLASS_ID(class,id)) {
+    case UBX_MON_VER:
         ret = ublox_pkt_create_get_version (buf_out, sz_bufout);
-
-#define CSTR_CUR_COMMAND "!UBX MON-HW"
-    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
+        break;
+    case UBX_MON_HW:
         ret = ublox_pkt_create_get_hw (buf_out, sz_bufout);
-#undef CSTR_CUR_COMMAND
-
-#define CSTR_CUR_COMMAND "!UBX MON-HW2"
-    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
+        break;
+    case UBX_MON_HW2:
         ret = ublox_pkt_create_get_hw2 (buf_out, sz_bufout);
-#undef CSTR_CUR_COMMAND
-
-#define CSTR_CUR_COMMAND "!UBX DBG-SET"
-    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
+        break;
+    case UBX_DBG_SET:
+    {
         unsigned int u4_1;
         unsigned int u4_2;
         unsigned int u4_3;
@@ -495,18 +522,34 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
         unsigned int class;
         unsigned int id;
 
-        sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%d %d %d %d %d %d", &u4_1, &u4_2, &u4_3, &u2_1, &class, &id);
-        fprintf(stderr, "ublox_pkt_create_unknown_msg1(0x%08X 0x%08X 0x%08X 0x%04X 0x%02X 0x%02X) from '%s'\n", u4_1, u4_2, u4_3, u2_1, class, id, buf_in + sizeof(CSTR_CUR_COMMAND));
+        sscanf(p_end, "%d %d %d %d %d %d", &u4_1, &u4_2, &u4_3, &u2_1, &class, &id);
+        fprintf(stderr, "ublox_pkt_create_dbg_set(0x%08X 0x%08X 0x%08X 0x%04X 0x%02X 0x%02X) from '%s'\n", u4_1, u4_2, u4_3, u2_1, class, id, p_end);
         ret = ublox_pkt_create_dbg_set (buf_out, sz_bufout, u4_1, u4_2, u4_3, u2_1, class, id);
-#undef CSTR_CUR_COMMAND
+    }
+        break;
 
-#define CSTR_CUR_COMMAND "!UBX CFG-MSG"
-    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
+    case UBX_CFG_BDS:
+    {
+        unsigned int u4_1;
+        unsigned int u4_2;
+        unsigned int u4_3;
+        unsigned int u4_4;
+        unsigned int u4_5;
+        unsigned int u4_6;
+
+        sscanf(p_end, "%d %d %d %d %d %d", &u4_1, &u4_2, &u4_3, &u4_4, &u4_5, &u4_6);
+        fprintf(stderr, "ublox_pkt_create_cfg_bds(0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X) from '%s'\n", u4_1, u4_2, u4_3, u4_4, u4_5, u4_6, p_end);
+        ret = ublox_pkt_create_cfg_bds (buf_out, sz_bufout, u4_1, u4_2, u4_3, u4_4, u4_5, u4_6);
+    }
+        break;
+
+    case UBX_CFG_MSG:
+    {
         int i;
         char *p;
         uint8_t buf1[8];
         memset(buf1, 0, sizeof(buf1));
-        p = buf_in + sizeof(CSTR_CUR_COMMAND)-1;
+        p = p_end-1;
         for (i = 0; i < 8; i ++) {
             p = strchr(p, ' ');
             if (NULL != p) {
@@ -521,16 +564,16 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
             i = 0;
         }
         ret = ublox_pkt_create_set_cfgmsg (buf_out, sz_bufout, buf1[0], buf1[1], buf1 + 2, 6);
-#undef CSTR_CUR_COMMAND
-
-#define CSTR_CUR_COMMAND "!UBX CFG-PRT"
-    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
+    }
+        break;
+    case UBX_CFG_PRT:
+    {
         unsigned int portID = 0xFF;
 
         int i;
         char *p;
 
-        p = buf_in + sizeof(CSTR_CUR_COMMAND)-1;
+        p = p_end-1;
         for (i = 0; i < 6; i ++) {
             p = strchr(p, ' ');
             if (NULL != p) {
@@ -552,17 +595,17 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
             unsigned int inProtoMask;
             unsigned int outProtoMask;
             unsigned int reserved;
-            sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%d %d %d %d %d %d", &portID, &txReady, &mode, &baudRate, &inProtoMask, &outProtoMask);
+            sscanf(p_end, "%d %d %d %d %d %d", &portID, &txReady, &mode, &baudRate, &inProtoMask, &outProtoMask);
             ret = ublox_pkt_create_set_cfgprt (buf_out, sz_bufout, portID, txReady, mode, baudRate, inProtoMask, outProtoMask);
         }
-#undef CSTR_CUR_COMMAND
-
-#define CSTR_CUR_COMMAND "!UBX CFG-RATE"
-    } else if (0 == STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
+    }
+        break;
+    case UBX_CFG_RATE:
+    {
         int i;
         char *p;
 
-        p = buf_in + sizeof(CSTR_CUR_COMMAND)-1;
+        p = p_end-1;
         for (i = 0; i < 3; i ++) {
             p = strchr(p, ' ');
             if (NULL != p) {
@@ -578,11 +621,16 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
             unsigned int measRate;
             unsigned int navRate;
             unsigned int timeRef;
-            sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%d %d %d", &measRate, &navRate, &timeRef);
+            sscanf(p_end, "%d %d %d", &measRate, &navRate, &timeRef);
             ret = ublox_pkt_create_set_cfgrate (buf_out, sz_bufout, measRate, navRate, timeRef);
         }
-#undef CSTR_CUR_COMMAND
     }
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+
     return ret;
 }
 

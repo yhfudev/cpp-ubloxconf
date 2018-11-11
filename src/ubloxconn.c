@@ -25,63 +25,6 @@
 
 /*****************************************************************************/
 
-#define UBX_NAV_TIMEGPS 0x0120
-#define UBX_NAV_CLOCK   0x0122
-
-#define UBX_RXM_RAW   0x0210
-#define UBX_RXM_SFRB  0x0211
-#define UBX_RXM_SFRBX 0x0213
-#define UBX_RXM_RAWX  0x0215
-
-#define UBX_TRK_D5    0x030A
-#define UBX_TRK_MEAS  0x0310
-#define UBX_TRK_SFRBX 0x030F
-
-#define UBX_ACK_NAK  0x0500
-#define UBX_ACK_ACK  0x0501
-
-#define UBX_CFG_ANT 0x0613
-#define UBX_CFG_CFG 0x0609
-#define UBX_CFG_DAT 0x0606
-#define UBX_CFG_EKF 0x0612
-#define UBX_CFG_ESFGWT 0x0629
-#define UBX_CFG_FXN  0x060E
-#define UBX_CFG_INF  0x0602
-#define UBX_CFG_ITFM 0x0639
-#define UBX_CFG_MSG  0x0601
-#define UBX_CFG_NAV5 0x0624
-#define UBX_CFG_NAVX5 0x0623
-#define UBX_CFG_NMEA  0x0617
-#define UBX_CFG_NVS   0x0622
-#define UBX_CFG_PM    0x0632
-#define UBX_CFG_PM2   0x063B
-#define UBX_CFG_PRT   0x0600
-#define UBX_CFG_RATE  0x0608
-#define UBX_CFG_RINV  0x0634
-#define UBX_CFG_RXM   0x0611
-#define UBX_CFG_SBAS  0x0616
-#define UBX_CFG_TMODE 0x061D
-#define UBX_CFG_TMODE2 0x063D
-#define UBX_CFG_TP    0x0607
-#define UBX_CFG_TP5   0x0631
-#define UBX_CFG_USB   0x061B
-
-#define UBX_DBG_SET  0x0901
-
-#define UBX_MON_HW    0x0A09
-#define UBX_MON_HW2   0x0A0B
-#define UBX_MON_IO    0x0A02
-#define UBX_MON_MSGPP 0x0A06
-#define UBX_MON_RXBUF 0x0A07
-#define UBX_MON_RXR   0x0A21
-#define UBX_MON_TXBUF 0x0A08
-#define UBX_MON_VER   0x0A04
-
-
-#define UBLOX_PKG_LENGTH(p) ((unsigned int)((p)[4]) | (((unsigned int)((p)[5])) << 8))
-
-#define UBLOX_CLASS_ID(class,id) (((class) << 8) | (id))
-
 const char *
 ublox_val2cstr_classid(uint16_t class, uint16_t id)
 {
@@ -108,6 +51,7 @@ ublox_val2cstr_classid(uint16_t class, uint16_t id)
         UBLOX_V2S(UBX_NAV_CLOCK);
 
         UBLOX_V2S(UBX_CFG_ANT);
+        UBLOX_V2S(UBX_CFG_BDS);
         UBLOX_V2S(UBX_CFG_CFG);
         UBLOX_V2S(UBX_CFG_DAT);
         UBLOX_V2S(UBX_CFG_EKF);
@@ -494,6 +438,99 @@ ublox_pkt_create_dbg_set (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_
 
     return ret;
 }
+
+/**
+ * \brief fill the buffer with the 'CFG-BDS' packet
+ * \param buffer:   the buffer to be filled
+ * \param sz_buf:   the byte size of the buffer
+ * \return <0 on fail, >0 the size of packet
+ */
+//!UBX CFG-BDS 00000000 00000000 0000001F FFFFFFFF 00000000 00000000
+ssize_t
+ublox_pkt_create_cfg_bds (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_t u4_2, uint32_t u4_3_mask, uint32_t u4_4_mask, uint32_t u4_5, uint32_t u4_6)
+{
+    ssize_t ret = 0;
+
+    if (NULL == buffer) {
+        return -1;
+    }
+    if (sz_buf < 8) {
+        return -1;
+    }
+    ret = 8;
+    assert (NULL != buffer);
+
+    // header
+    buffer[0] = 0xB5;
+    buffer[1] = 0x62;
+    // class
+    buffer[2] = 0x06;
+    // ID
+    buffer[3] = 0x4A;
+    // length, little endian
+    buffer[4] = 0x18; // 24 bytes
+    buffer[5] = 0x00;
+
+    // payload
+    ret = 6;
+    // little endian
+    buffer[ret ++] = u4_1 & 0xFF;
+    buffer[ret ++] = (u4_1 >> 8) & 0xFF;
+    buffer[ret ++] = (u4_1 >> 16) & 0xFF;
+    buffer[ret ++] = (u4_1 >> 24) & 0xFF;
+
+    buffer[ret ++] = u4_2 & 0xFF;
+    buffer[ret ++] = (u4_2 >> 8) & 0xFF;
+    buffer[ret ++] = (u4_2 >> 16) & 0xFF;
+    buffer[ret ++] = (u4_2 >> 24) & 0xFF;
+
+    buffer[ret ++] = u4_3_mask & 0xFF;
+    buffer[ret ++] = (u4_3_mask >> 8) & 0xFF;
+    buffer[ret ++] = (u4_3_mask >> 16) & 0xFF;
+    buffer[ret ++] = (u4_3_mask >> 24) & 0xFF;
+
+    buffer[ret ++] = u4_4_mask & 0xFF;
+    buffer[ret ++] = (u4_4_mask >> 8) & 0xFF;
+    buffer[ret ++] = (u4_4_mask >> 16) & 0xFF;
+    buffer[ret ++] = (u4_4_mask >> 24) & 0xFF;
+
+    buffer[ret ++] = u4_5 & 0xFF;
+    buffer[ret ++] = (u4_5 >> 8) & 0xFF;
+    buffer[ret ++] = (u4_5 >> 16) & 0xFF;
+    buffer[ret ++] = (u4_5 >> 24) & 0xFF;
+
+    buffer[ret ++] = u4_6 & 0xFF;
+    buffer[ret ++] = (u4_6 >> 8) & 0xFF;
+    buffer[ret ++] = (u4_6 >> 16) & 0xFF;
+    buffer[ret ++] = (u4_6 >> 24) & 0xFF;
+
+    ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
+    ret += 2;
+    assert(ret == 24 + 8);
+
+    return ret;
+}
+
+#if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
+#include <ciut.h>
+
+TEST_CASE( .name="ublox-ext-bds", .description="Test ublox ublox_pkt_create_cfg_bds functions." ) {
+    uint8_t buffer[30];
+    SECTION("test ublox ublox_pkt_create_cfg_bds") {
+        CIUT_LOG ("check ublox_pkt_create_cfg_bds %d", 0);
+
+        REQUIRE(sizeof(buffer) > 24);
+        //!HEX B5 62 06 4A 18 00 00 00 00 00 00 00 00 00 1F 00 00 00 FF FF FF FF 00 00 00 00 00 00 00 00 83 AC
+        REQUIRE(24 + 8 == ublox_pkt_create_cfg_bds(buffer, sizeof(buffer), 0, 0, 31, 4294967295, 0, 0));
+        CIUT_LOG("%d RAW buffer:", 0);
+        hex_dump_to_fd(STDERR_FILENO, buffer, 24 + 8);
+        REQUIRE(24 == UBLOX_PKG_LENGTH(buffer));
+        REQUIRE(ublox_pkt_verify(buffer, UBLOX_PKG_LENGTH(buffer)+8) == 0);
+        REQUIRE(*(buffer + UBLOX_PKG_LENGTH(buffer)+8-2) == 0x83);
+        REQUIRE(*(buffer + UBLOX_PKG_LENGTH(buffer)+8-1) == 0xAC);
+    }
+}
+#endif /* CIUT_ENABLED */
 
 
 /**
@@ -1218,6 +1255,39 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         fprintf(stderr, "\tid: %02X\n", *p);
         p += 1;
 
+    }
+        break;
+
+    case UBX_CFG_BDS:
+    {
+        uint32_t val32;
+        assert(count == 24);
+
+        fprintf(stderr, "ublox !UBX CFG-BDS:\n");
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tX4_1: %08X\n", val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tX4_2: %08X\n", val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tX4_3: %08X\n", val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tX4_4: %08X\n", val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tX4_5: %08X\n", val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tX4_6: %08X\n", val32);
+        p += 4;
     }
         break;
 

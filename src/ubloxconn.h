@@ -73,6 +73,65 @@ extern "C" {
 #define UBLOX_CLASS_AID 0x0B
 #define UBLOX_CLASS_ESF 0x10
 
+#define UBX_NAV_TIMEGPS 0x0120
+#define UBX_NAV_CLOCK   0x0122
+
+#define UBX_RXM_RAW   0x0210
+#define UBX_RXM_SFRB  0x0211
+#define UBX_RXM_SFRBX 0x0213
+#define UBX_RXM_RAWX  0x0215
+
+#define UBX_TRK_D5    0x030A
+#define UBX_TRK_MEAS  0x0310
+#define UBX_TRK_SFRBX 0x030F
+
+#define UBX_ACK_NAK  0x0500
+#define UBX_ACK_ACK  0x0501
+
+#define UBX_CFG_ANT 0x0613
+#define UBX_CFG_BDS 0x064A
+#define UBX_CFG_CFG 0x0609
+#define UBX_CFG_DAT 0x0606
+#define UBX_CFG_EKF 0x0612
+#define UBX_CFG_ESFGWT 0x0629
+#define UBX_CFG_FXN  0x060E
+#define UBX_CFG_INF  0x0602
+#define UBX_CFG_ITFM 0x0639
+#define UBX_CFG_MSG  0x0601
+#define UBX_CFG_NAV5 0x0624
+#define UBX_CFG_NAVX5 0x0623
+#define UBX_CFG_NMEA  0x0617
+#define UBX_CFG_NVS   0x0622
+#define UBX_CFG_PM    0x0632
+#define UBX_CFG_PM2   0x063B
+#define UBX_CFG_PRT   0x0600
+#define UBX_CFG_RATE  0x0608
+#define UBX_CFG_RINV  0x0634
+#define UBX_CFG_RXM   0x0611
+#define UBX_CFG_SBAS  0x0616
+#define UBX_CFG_TMODE 0x061D
+#define UBX_CFG_TMODE2 0x063D
+#define UBX_CFG_TP    0x0607
+#define UBX_CFG_TP5   0x0631
+#define UBX_CFG_USB   0x061B
+
+#define UBX_DBG_SET  0x0901
+
+#define UBX_MON_HW    0x0A09
+#define UBX_MON_HW2   0x0A0B
+#define UBX_MON_IO    0x0A02
+#define UBX_MON_MSGPP 0x0A06
+#define UBX_MON_RXBUF 0x0A07
+#define UBX_MON_RXR   0x0A21
+#define UBX_MON_TXBUF 0x0A08
+#define UBX_MON_VER   0x0A04
+
+
+#define UBLOX_PKG_LENGTH(p) ((unsigned int)((p)[4]) | (((unsigned int)((p)[5])) << 8))
+
+#define UBLOX_CLASS_ID(class,id) (((class) << 8) | (id))
+
+
 void ublox_pkt_checksum(void *buffer, int length, char * out_buf);
 int ublox_pkt_verify (uint8_t *buffer, size_t sz_buf);
 
@@ -89,6 +148,7 @@ ssize_t ublox_pkt_create_get_cfgrate (uint8_t *buffer, size_t sz_buf);
 ssize_t ublox_pkt_create_set_cfgrate (uint8_t *buffer, size_t sz_buf, uint16_t measRate, uint16_t navRate, uint16_t timeRef);
 
 ssize_t ublox_pkt_create_dbg_set (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_t u4_2, uint32_t u4_3, uint16_t u2_1, uint8_t class, uint8_t id);
+ssize_t ublox_pkt_create_cfg_bds (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_t u4_2, uint32_t u4_3_mask, uint32_t u4_4_mask, uint32_t u4_5, uint32_t u4_6);
 
 int ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, size_t * sz_needed_in);
 int ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, size_t * sz_needed_in);
