@@ -10,7 +10,7 @@
 #ifndef UBLOX_CONN_H
 #define UBLOX_CONN_H
 
-#define DEBUG 1
+#define DEBUG 0
 
 
 #include <stdlib.h>    /* size_t */

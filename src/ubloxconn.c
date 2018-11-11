@@ -339,14 +339,7 @@ ublox_pkt_create_get_version (uint8_t *buffer, size_t sz_buf)
     buffer[5] = 0x00;
     // no payload
 
-#if 0
-    // checksum A
-    buffer[6] = 0x0E;
-    // checksum B
-    buffer[7] = 0x34;
-#else
     ublox_pkt_checksum(buffer + 2, 4, buffer + 6);
-#endif
 
     return ret;
 }
@@ -1016,12 +1009,14 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         fprintf(stderr, "\thwVersion: %s\n", buf);
 #undef LEN_SEG
 
+        if (count >= 30 + 10 + 30) {
 #define LEN_SEG 30
-        buf[0] = 0;
-        strncpy(buf, buffer_in + 6 + 30 + 10, LEN_SEG);
-        buf[LEN_SEG] = 0;
-        fprintf(stderr, "\tromVersion: %s\n", buf);
+            buf[0] = 0;
+            strncpy(buf, buffer_in + 6 + 30 + 10, LEN_SEG);
+            buf[LEN_SEG] = 0;
+            fprintf(stderr, "\tromVersion: %s\n", buf);
 #undef LEN_SEG
+        }
 
 #define LEN_SEG 30
         for (i = 0; 30 + 10 + 30 + i * 30 + 30 <= count; i ++) {

@@ -495,7 +495,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
         unsigned int class;
         unsigned int id;
 
-        sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%X %X %X %X %X %X", &u4_1, &u4_2, &u4_3, &u2_1, &class, &id);
+        sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%d %d %d %d %d %d", &u4_1, &u4_2, &u4_3, &u2_1, &class, &id);
         fprintf(stderr, "ublox_pkt_create_unknown_msg1(0x%08X 0x%08X 0x%08X 0x%04X 0x%02X 0x%02X) from '%s'\n", u4_1, u4_2, u4_3, u2_1, class, id, buf_in + sizeof(CSTR_CUR_COMMAND));
         ret = ublox_pkt_create_dbg_set (buf_out, sz_bufout, u4_1, u4_2, u4_3, u2_1, class, id);
 #undef CSTR_CUR_COMMAND
@@ -552,7 +552,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
             unsigned int inProtoMask;
             unsigned int outProtoMask;
             unsigned int reserved;
-            sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%X %X %X %X %X %X", &portID, &txReady, &mode, &baudRate, &inProtoMask, &outProtoMask);
+            sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%d %d %d %d %d %d", &portID, &txReady, &mode, &baudRate, &inProtoMask, &outProtoMask);
             ret = ublox_pkt_create_set_cfgprt (buf_out, sz_bufout, portID, txReady, mode, baudRate, inProtoMask, outProtoMask);
         }
 #undef CSTR_CUR_COMMAND
@@ -578,7 +578,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
             unsigned int measRate;
             unsigned int navRate;
             unsigned int timeRef;
-            sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%X %X %X", &measRate, &navRate, &timeRef);
+            sscanf(buf_in + sizeof(CSTR_CUR_COMMAND), "%d %d %d", &measRate, &navRate, &timeRef);
             ret = ublox_pkt_create_set_cfgrate (buf_out, sz_bufout, measRate, navRate, timeRef);
         }
 #undef CSTR_CUR_COMMAND
