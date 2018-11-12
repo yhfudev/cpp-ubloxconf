@@ -339,19 +339,39 @@ ublox_classid_cstr2val(char * buf, size_t size, uint8_t * p_class, uint8_t *p_id
         {"TP5", 0x31},
         {"USB", 0x1B},
     };
-    cstr_val_t list_id_dbg[] = {
-        {"SET", 0x01},
+    cstr_val_t list_id_trk[] = {
+        {"D2",   0x06}, // antaris4
+        {"D5",   0x0A}, // ublox6 ROM 7.03
+        {"MEAS", 0x10}, // ubloxM8 ROM 2.01
+        {"SFRB", 0x02}, // ublox6 ROM 7.03
+        {"SFRBX", 0x0F}, // ubloxM8 ROM 2.01
+    };
+    cstr_val_t list_id_upd[] = {
+        {"DOWNL",  0x01},
+        {"EXEC",   0x03},
+        {"MEMCPY", 0x04},
+        {"SOS",    0x14},
+        {"UPLOAD", 0x02},
+    };
+    cstr_val_t list_id_nav[] = {
+        {"TIMEGPS", 0x20},
+        {"CLOCK",   0x22},
+        {"SVINFO",  0x30},
     };
 
     cstr_val_t list_class[] = {
         {"CFG", 0x06},
-        {"DBG", 0x09},
         {"MON", 0x0A},
+        {"NAV", 0x01},
+        {"TRK", 0x03},
+        {"UPD", 0x09},
     };
     record_cstr_val_t ublox_class_id[] = {
         { &list_id_cfg, NUM_ARRAY(list_id_cfg), },
-        { &list_id_dbg, NUM_ARRAY(list_id_dbg), },
         { &list_id_mon, NUM_ARRAY(list_id_mon), },
+        { &list_id_nav, NUM_ARRAY(list_id_nav), },
+        { &list_id_trk, NUM_ARRAY(list_id_trk), },
+        { &list_id_upd, NUM_ARRAY(list_id_upd), },
     };
 
     char buffer[20];
@@ -390,6 +410,174 @@ ublox_classid_cstr2val(char * buf, size_t size, uint8_t * p_class, uint8_t *p_id
     return 0;
 }
 
+#if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
+#include <ciut.h>
+
+TEST_CASE( .name="ublox-ublox_classid_cstr2val", .description="Test ublox_classid_cstr2val functions." ) {
+    char buffer[10];
+    SECTION("test ublox ublox_classid_cstr2val") {
+        uint8_t class;
+        uint8_t id;
+
+#define CSTR_CLASSID "UPD-DOWNL"
+        REQUIRE(0 <= ublox_classid_cstr2val(CSTR_CLASSID, sizeof(CSTR_CLASSID)-1, &class, &id));
+        REQUIRE(class == 0x09 && id == 0x01);
+
+#define CSTR_CLASSID "MON-HW2"
+        REQUIRE(0 <= ublox_classid_cstr2val(CSTR_CLASSID, sizeof(CSTR_CLASSID)-1, &class, &id));
+        REQUIRE(class == 0x0A && id == 0x0B);
+
+#define CSTR_CLASSID "NAV-SVINFO"
+        REQUIRE(0 <= ublox_classid_cstr2val(CSTR_CLASSID, sizeof(CSTR_CLASSID)-1, &class, &id));
+        REQUIRE(class == 0x01 && id == 0x30);
+
+#define CSTR_CLASSID "TRK-SFRB"
+        REQUIRE(0 <= ublox_classid_cstr2val(CSTR_CLASSID, sizeof(CSTR_CLASSID)-1, &class, &id));
+        REQUIRE(class == 0x03 && id == 0x02);
+
+#define CSTR_CLASSID "CFG-USB"
+        REQUIRE(0 <= ublox_classid_cstr2val(CSTR_CLASSID, sizeof(CSTR_CLASSID)-1, &class, &id));
+        REQUIRE(class == 0x06 && id == 0x1B);
+    }
+}
+#endif /* CIUT_ENABLED */
+
+
+static ssize_t
+parse_dec_array_string(const char *cstr_in, size_t len_cstr, char * buffer_out, size_t sz_bufout)
+{
+    int i = 0;
+    unsigned int val;
+    char *p = cstr_in;
+
+    for (i = 0; ; i ++) {
+        if (sscanf(p, "%d", &val) <= 0) {
+            break;
+        }
+        if (sz_bufout < i) {
+            fprintf(stderr, "output buffer size too small: '%d' at pos=%d\n", sz_bufout, i);
+            return -2;
+        }
+        // got value
+        buffer_out[i] = val & 0xFF;
+        p = strchr(p, ' ');
+        if (NULL == p) {
+            i ++;
+            break;
+        }
+        p ++;
+    }
+    return i;
+}
+
+// return < 0 on error, >=0 the size of output buffer
+static ssize_t
+parse_hex_array_string(const char *cstr_in, size_t len_cstr, char * buffer_out, size_t sz_bufout)
+{
+    int i = 0;
+    unsigned int val;
+    char *p = cstr_in;
+
+    for (i = 0; ; i ++) {
+        if (sscanf(p, "%x", &val) <= 0) {
+            break;
+        }
+        if (sz_bufout < i) {
+            fprintf(stderr, "output buffer size too small: '%d' at pos=%d\n", sz_bufout, i);
+            return -2;
+        }
+        // got value
+        buffer_out[i] = val & 0xFF;
+        p = strchr(p, ' ');
+        if (NULL == p) {
+            i ++;
+            break;
+        }
+        p ++;
+    }
+    return i;
+}
+
+#if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
+#include <ciut.h>
+
+TEST_CASE( .name="ublox-parse_dec_array_string", .description="Test parse_dec_array_string functions." ) {
+    char buffer[10];
+    SECTION("test ublox parse_dec_array_string") {
+        char *cstr_1 = "35 204 33 0 0 0 2 16";
+        char *cstr_2 = "23 cc 21 00 00 00 02 10";
+        char hex_1[] = {0x23, 0xcc, 0x21, 0x00, 0x00, 0x00, 0x02, 0x10,};
+
+        REQUIRE(sizeof(buffer) >= sizeof(hex_1));
+        CIUT_LOG ("check parse_dec_array_string %d", 0);
+        REQUIRE(sizeof(hex_1) == parse_dec_array_string(cstr_1, sizeof(cstr_1)-1, buffer, sizeof(buffer)));
+        REQUIRE(0 == memcmp(buffer, hex_1, sizeof(hex_1)));
+        CIUT_LOG ("check parse_hex_array_string %d", 0);
+        REQUIRE(sizeof(hex_1) == parse_hex_array_string(cstr_2, sizeof(cstr_2)-1, buffer, sizeof(buffer)));
+        REQUIRE(0 == memcmp(buffer, hex_1, sizeof(hex_1)));
+    }
+    SECTION("test ublox parse_dec_array_string 2") {
+        char *cstr_1 = "15 204 33 0 0 0 2 17";
+        char *cstr_2 = "0f cc 21 00 00 00 02 11";
+        char hex_1[] = {0x0f, 0xcc, 0x21, 0x00, 0x00, 0x00, 0x02, 0x11,};
+
+        REQUIRE(sizeof(buffer) >= sizeof(hex_1));
+        CIUT_LOG ("check parse_dec_array_string %d", 0);
+        REQUIRE(sizeof(hex_1) == parse_dec_array_string(cstr_1, sizeof(cstr_1)-1, buffer, sizeof(buffer)));
+        REQUIRE(0 == memcmp(buffer, hex_1, sizeof(hex_1)));
+        CIUT_LOG ("check parse_hex_array_string %d", 0);
+        REQUIRE(sizeof(hex_1) == parse_hex_array_string(cstr_2, sizeof(cstr_2)-1, buffer, sizeof(buffer)));
+        REQUIRE(0 == memcmp(buffer, hex_1, sizeof(hex_1)));
+    }
+    SECTION("test ublox parse_dec_array_string") {
+        char *cstr_1 = "151 105 33 0 0 0 2 16";
+        char *cstr_2 = "97 69 21 00 00 00 02 10";
+        char hex_1[] = {0x97, 0x69, 0x21, 0x00, 0x00, 0x00, 0x02, 0x10,};
+
+        REQUIRE(sizeof(buffer) >= sizeof(hex_1));
+        CIUT_LOG ("check parse_dec_array_string %d", 0);
+        REQUIRE(sizeof(hex_1) == parse_dec_array_string(cstr_1, sizeof(cstr_1)-1, buffer, sizeof(buffer)));
+        REQUIRE(0 == memcmp(buffer, hex_1, sizeof(hex_1)));
+        CIUT_LOG ("check parse_hex_array_string %d", 0);
+        REQUIRE(sizeof(hex_1) == parse_hex_array_string(cstr_2, sizeof(cstr_2)-1, buffer, sizeof(buffer)));
+        REQUIRE(0 == memcmp(buffer, hex_1, sizeof(hex_1)));
+    }
+    SECTION("test ublox parse_dec_array_string 2") {
+        char *cstr_1 = "131 105 33 0 0 0 2 17";
+        char *cstr_2 = "83 69 21 00 00 00 02 11";
+        char hex_1[] = {0x83, 0x69, 0x21, 0x00, 0x00, 0x00, 0x02, 0x11,};
+
+        REQUIRE(sizeof(buffer) >= sizeof(hex_1));
+        CIUT_LOG ("check parse_dec_array_string %d", 0);
+        REQUIRE(sizeof(hex_1) == parse_dec_array_string(cstr_1, sizeof(cstr_1)-1, buffer, sizeof(buffer)));
+        REQUIRE(0 == memcmp(buffer, hex_1, sizeof(hex_1)));
+        CIUT_LOG ("check parse_hex_array_string %d", 0);
+        REQUIRE(sizeof(hex_1) == parse_hex_array_string(cstr_2, sizeof(cstr_2)-1, buffer, sizeof(buffer)));
+        REQUIRE(0 == memcmp(buffer, hex_1, sizeof(hex_1)));
+    }
+}
+#endif /* CIUT_ENABLED */
+
+
+#define IS_BLANK(a) (isblank(a) || ('\t' == (a)) || ('\r' == (a)) || ('\n' == (a)))
+
+#if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
+#include <ciut.h>
+
+TEST_CASE( .name="ublox-IS_BLANK", .description="Test IS_BLANK functions." ) {
+    SECTION("test ublox IS_BLANK") {
+        REQUIRE(IS_BLANK('\t'));
+        REQUIRE(IS_BLANK('\r'));
+        REQUIRE(IS_BLANK('\n'));
+        REQUIRE(IS_BLANK(' '));
+        REQUIRE(isblank('\t'));
+        REQUIRE(! isblank('\r'));
+        REQUIRE(! isblank('\n'));
+        REQUIRE(isblank(' '));
+    }
+}
+#endif /* CIUT_ENABLED */
+
 /**
  * \brief process a line and output the binary to buffer for U-Blox config file
  * \param buf_in: the input buffer
@@ -408,9 +596,8 @@ process_command_line_buf_ubloxhex(char * buf, size_t size, uint8_t * buf_out, si
     uint16_t len;
     char *p = buf;
     char *p_end = NULL;
-    int i;
     char buffer[20];
-    unsigned int val;
+    ssize_t sz_ret;
 
     // find the " - "
     p_end = strstr(buf, " - ");
@@ -434,34 +621,22 @@ process_command_line_buf_ubloxhex(char * buf, size_t size, uint8_t * buf_out, si
     buf_out[0] = 0xB5;
     buf_out[1] = 0x62;
     p = p_end + 2;
-    for (i = 2; ; i ++) {
-        p = strchr(p, ' ');
-        if (NULL == p) {
-            break;
-        }
-        p ++;
-        if (sscanf(p, "%x", &val) <= 0) {
-            break;
-        }
-        if (sz_bufout < i) {
-            fprintf(stderr, "output buffer size too small: '%d' at pos=%d\n", sz_bufout, i);
-            return -2;
-        }
-        // got value
-        buf_out[i] = val & 0xFF;
+    sz_ret = parse_hex_array_string(p, size - (p - buf), buf_out + 2, sz_bufout - 2 - 2);
+    if (sz_ret < 0) {
+        fprintf(stderr, "output buffer size too small: '%d'\n", sz_bufout);
+        return -2;
     }
-    assert (i >= 8);
     // check the class,id,length
     len = (((unsigned int)buf_out[5]) << 8) | buf_out[4];
 
-    assert (len + 2 + 4 == i);
+    assert (len + 2 + 4 == sz_ret + 2);
     assert (class == buf_out[2]);
     assert (id == buf_out[3]);
 
-    ublox_pkt_checksum(buf_out + 2, i - 2, buf_out + i);
-    i += 2;
+    ublox_pkt_checksum(buf_out + 2, sz_ret, buf_out + sz_ret + 2);
+    sz_ret += 4;
 
-    return i;
+    return sz_ret;
 }
 
 /**
@@ -513,18 +688,50 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
     case UBX_MON_HW2:
         ret = ublox_pkt_create_get_hw2 (buf_out, sz_bufout);
         break;
-    case UBX_DBG_SET:
+    case UBX_UPD_DOWNL:
     {
         unsigned int u4_1;
         unsigned int u4_2;
-        unsigned int u4_3;
-        unsigned int u2_1;
-        unsigned int class;
-        unsigned int id;
+        ssize_t len;
+        char *p;
+        char buf2[40];
 
-        sscanf(p_end, "%d %d %d %d %d %d", &u4_1, &u4_2, &u4_3, &u2_1, &class, &id);
-        fprintf(stderr, "ublox_pkt_create_dbg_set(0x%08X 0x%08X 0x%08X 0x%04X 0x%02X 0x%02X) from '%s'\n", u4_1, u4_2, u4_3, u2_1, class, id, p_end);
-        ret = ublox_pkt_create_dbg_set (buf_out, sz_bufout, u4_1, u4_2, u4_3, u2_1, class, id);
+        if (sscanf(p_end, "%d %d", &u4_1, &u4_2) != 2) {
+            // error in scan the data
+            fprintf(stderr, "sscanf two numbers failed\n");
+            ret = -1;
+            break;
+        }
+        p = p_end;
+        while (IS_BLANK(*p) && p < buf_in + sz_bufin) p ++;
+        if (p >= buf_in + sz_bufin) {
+            break;
+        }
+        p = strchr(p, ' ');
+        if (NULL == p) {
+            break;
+        }
+        while (IS_BLANK(*p) && p < buf_in + sz_bufin) p ++;
+        if (p >= buf_in + sz_bufin) {
+            break;
+        }
+        p = strchr(p, ' ');
+        if (NULL == p) {
+            break;
+        }
+        while (IS_BLANK(*p) && p < buf_in + sz_bufin) p ++;
+        if (p >= buf_in + sz_bufin) {
+            break;
+        }
+
+        len = parse_dec_array_string(p, sz_bufin - (p - buf_in), buf2, sizeof(buf2));
+        if (len < 0) {
+            fprintf(stderr, "output buffer size too small: '%d'\n", sizeof(buf2));
+            ret = -2;
+            break;
+        }
+        fprintf(stderr, "ublox_pkt_create_upd_downl(0x%08X 0x%08X) from '%s'\n", u4_1, u4_2);
+        ret = ublox_pkt_create_upd_downl (buf_out, sz_bufout, u4_1, u4_2, buf2, len);
     }
         break;
 
@@ -559,11 +766,11 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
                 break;
             }
         }
-        if (i < 8) {
-            // get conf
-            i = 0;
+        if (i < 2) {
+            // error
+            break;
         }
-        ret = ublox_pkt_create_set_cfgmsg (buf_out, sz_bufout, buf1[0], buf1[1], buf1 + 2, 6);
+        ret = ublox_pkt_create_set_cfgmsg (buf_out, sz_bufout, buf1[0], buf1[1], buf1 + 2, i - 2);
     }
         break;
     case UBX_CFG_PRT:
@@ -633,6 +840,74 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
 
     return ret;
 }
+
+#if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
+#include <ciut.h>
+//ssize_t process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, size_t sz_bufout);
+TEST_CASE( .name="ublox-process_command_line_buf_rtklibarg", .description="Test process_command_line_buf_rtklibarg functions." ) {
+    char buffer1[30];
+    char buffer2[30];
+    SECTION("test process_command_line_buf_rtklibarg") {
+#define CSTR_CMD "!UBX UPD-DOWNL 4060 0   35 204 33 0 0 0 2 16"
+#define CSTR_HEX "b5 62 09 01 10 00 dc 0f 00 00 00 00 00 00 23 cc 21 00 00 00 02 10 27 0e"
+
+        CIUT_LOG("cstr2 len=%d", sizeof(CSTR_HEX));
+        REQUIRE(24 == (sizeof(CSTR_HEX) + 1)/3);
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+    SECTION("test process_command_line_buf_rtklibarg") {
+#define CSTR_CMD "!UBX UPD-DOWNL 4360 0   15 204 33 0 0 0 2 17"
+#define CSTR_HEX "b5 62 09 01 10 00 08 11 00 00 00 00 00 00 0f cc 21 00 00 00 02 11 42 4d"
+
+        CIUT_LOG("cstr2 len=%d", sizeof(CSTR_HEX));
+        REQUIRE(24 == (sizeof(CSTR_HEX) + 1)/3);
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+    SECTION("test process_command_line_buf_rtklibarg") {
+#define CSTR_CMD "!UBX UPD-DOWNL 6412 0  131 105 33 0 0 0 2 17"
+#define CSTR_HEX "b5 62 09 01 10 00 0c 19 00 00 00 00 00 00 83 69 21 00 00 00 02 11 5f f0"
+
+        CIUT_LOG("cstr2 len=%d", sizeof(CSTR_HEX));
+        REQUIRE(24 == (sizeof(CSTR_HEX) + 1)/3);
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+    SECTION("test process_command_line_buf_rtklibarg") {
+#define CSTR_CMD "!UBX UPD-DOWNL 5832 0  151 105 33 0 0 0 2 16"
+#define CSTR_HEX "b5 62 09 01 10 00 c8 16 00 00 00 00 00 00 97 69 21 00 00 00 02 10 2b 22"
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        CIUT_LOG("----------------\n", 0);
+        CIUT_LOG("buffer1:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("buffer2:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("----------------", 0);
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+}
+#endif /* CIUT_ENABLED */
 
 /**
  * \brief parse the lines in the buffer and send out packets base on the command
@@ -822,6 +1097,9 @@ process_command_stdout(off_t pos, char * buf, size_t size, void *userdata)
 }
 
 /*****************************************************************************/
+
+#if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
+#else
 void
 version (void)
 {
@@ -925,4 +1203,4 @@ main (int argc, char **argv)
     }
     return main_cli(host, port, timeout, fn_execute);
 }
-
+#endif /* CIUT_ENABLED */

@@ -15,9 +15,11 @@ DEFS += \
 AM_CFLAGS += \
     -I$(top_srcdir)/src/ \
     -I$(top_srcdir)/include/ \
+    -I$(top_srcdir)/app/ \
     -I$(top_builddir)/ \
     -I$(top_builddir)/src/ \
     -I$(top_builddir)/include/ \
+    -I$(top_builddir)/app/ \
     $(NULL)
 
 AM_LDFLAGS += \
@@ -76,6 +78,8 @@ ciutexec.c:
 	-echo "#endif" >> $@
 	-echo "#include <ciut.h>" >> $@
 	-echo "#include \"../src/ubloxconn.c\"" >> $@
+	-echo "#include \"../app/ubloxconf.c\"" >> $@
+	-echo "#include \"../app/utils.c\"" >> $@
 	-echo "int main(int argc, const char * argv[]) { return ciut_main(argc, argv); }" >> $@
 clean-local-check:
 	-rm -rf ciutexec.c

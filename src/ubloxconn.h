@@ -75,14 +75,17 @@ extern "C" {
 
 #define UBX_NAV_TIMEGPS 0x0120
 #define UBX_NAV_CLOCK   0x0122
+#define UBX_NAV_SVINFO  0x0130
 
 #define UBX_RXM_RAW   0x0210
 #define UBX_RXM_SFRB  0x0211
 #define UBX_RXM_SFRBX 0x0213
 #define UBX_RXM_RAWX  0x0215
 
+#define UBX_TRK_D2    0x0306
 #define UBX_TRK_D5    0x030A
 #define UBX_TRK_MEAS  0x0310
+#define UBX_TRK_SFRB  0x0302
 #define UBX_TRK_SFRBX 0x030F
 
 #define UBX_ACK_NAK  0x0500
@@ -115,7 +118,11 @@ extern "C" {
 #define UBX_CFG_TP5   0x0631
 #define UBX_CFG_USB   0x061B
 
-#define UBX_DBG_SET  0x0901
+#define UBX_UPD_DOWNL  0x0901
+#define UBX_UPD_EXEC   0x0903
+#define UBX_UPD_MEMCPY 0x0904
+#define UBX_UPD_SOS    0x0914 // ublox 8 protocol doc
+#define UBX_UPD_UPLOAD 0x0902
 
 #define UBX_MON_HW    0x0A09
 #define UBX_MON_HW2   0x0A0B
@@ -147,7 +154,7 @@ ssize_t ublox_pkt_create_set_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t por
 ssize_t ublox_pkt_create_get_cfgrate (uint8_t *buffer, size_t sz_buf);
 ssize_t ublox_pkt_create_set_cfgrate (uint8_t *buffer, size_t sz_buf, uint16_t measRate, uint16_t navRate, uint16_t timeRef);
 
-ssize_t ublox_pkt_create_dbg_set (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_t u4_2, uint32_t u4_3, uint16_t u2_1, uint8_t class, uint8_t id);
+ssize_t ublox_pkt_create_upd_downl (uint8_t *buffer, size_t sz_buf, uint32_t startAddr, uint32_t flags, uint8_t *data, size_t len);
 ssize_t ublox_pkt_create_cfg_bds (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_t u4_2, uint32_t u4_3_mask, uint32_t u4_4_mask, uint32_t u4_5, uint32_t u4_6);
 
 int ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, size_t * sz_needed_in);

@@ -49,6 +49,7 @@ ublox_val2cstr_classid(uint16_t class, uint16_t id)
 
         UBLOX_V2S(UBX_NAV_TIMEGPS);
         UBLOX_V2S(UBX_NAV_CLOCK);
+        UBLOX_V2S(UBX_NAV_SVINFO);
 
         UBLOX_V2S(UBX_CFG_ANT);
         UBLOX_V2S(UBX_CFG_BDS);
@@ -77,10 +78,16 @@ ublox_val2cstr_classid(uint16_t class, uint16_t id)
         UBLOX_V2S(UBX_CFG_TP5);
         UBLOX_V2S(UBX_CFG_USB);
 
-        UBLOX_V2S(UBX_DBG_SET);
+        UBLOX_V2S(UBX_UPD_DOWNL);
+        UBLOX_V2S(UBX_UPD_EXEC);
+        UBLOX_V2S(UBX_UPD_MEMCPY);
+        UBLOX_V2S(UBX_UPD_SOS);
+        UBLOX_V2S(UBX_UPD_UPLOAD);
 
+        UBLOX_V2S(UBX_TRK_D2);
         UBLOX_V2S(UBX_TRK_D5);
         UBLOX_V2S(UBX_TRK_MEAS);
+        UBLOX_V2S(UBX_TRK_SFRB);
         UBLOX_V2S(UBX_TRK_SFRBX);
     }
     return "UNKNOWN_UBX_ID";
@@ -378,14 +385,16 @@ TEST_CASE( .name="ublox-version", .description="Test ublox ublox_pkt_create_get_
 
 
 /**
- * \brief fill the buffer with the 'DBG-SET' packet
+ * \brief fill the buffer with the 'UPD-DOWNL' packet
  * \param buffer:   the buffer to be filled
  * \param sz_buf:   the byte size of the buffer
  * \return <0 on fail, >0 the size of packet
+ *
+ * Download Data to Memory
  */
-//!UBX DBG-SET 000016C8 00000000 00216997 0000 02 10
+//!UBX UPD-DOWNL 000016C8 00000000 00216997 0000 02 10
 ssize_t
-ublox_pkt_create_dbg_set (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_t u4_2, uint32_t u4_3, uint16_t u2_1, uint8_t class, uint8_t id)
+ublox_pkt_create_upd_downl (uint8_t *buffer, size_t sz_buf, uint32_t startAddr, uint32_t flags, uint8_t *data, size_t len)
 {
     ssize_t ret = 0;
 
@@ -394,6 +403,9 @@ ublox_pkt_create_dbg_set (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_
     }
     if (sz_buf < 8) {
         return -1;
+    }
+    if (sz_buf < 8 + 8 + len) {
+        return -2;
     }
     ret = 8;
     assert (NULL != buffer);
@@ -406,35 +418,28 @@ ublox_pkt_create_dbg_set (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_
     // ID
     buffer[3] = 0x01;
     // length, little endian
-    buffer[4] = 0x10; // 16 bytes
-    buffer[5] = 0x00;
+    ret = 8 + len;
+    buffer[4] = ret & 0xFF;
+    buffer[5] = (ret >> 8) & 0xFF;
 
     // payload
     ret = 6;
     // little endian
-    buffer[ret ++] = u4_1 & 0xFF;
-    buffer[ret ++] = (u4_1 >> 8) & 0xFF;
-    buffer[ret ++] = (u4_1 >> 16) & 0xFF;
-    buffer[ret ++] = (u4_1 >> 24) & 0xFF;
+    buffer[ret ++] = startAddr & 0xFF;
+    buffer[ret ++] = (startAddr >> 8) & 0xFF;
+    buffer[ret ++] = (startAddr >> 16) & 0xFF;
+    buffer[ret ++] = (startAddr >> 24) & 0xFF;
 
-    buffer[ret ++] = u4_2 & 0xFF;
-    buffer[ret ++] = (u4_2 >> 8) & 0xFF;
-    buffer[ret ++] = (u4_2 >> 16) & 0xFF;
-    buffer[ret ++] = (u4_2 >> 24) & 0xFF;
+    buffer[ret ++] = flags & 0xFF;
+    buffer[ret ++] = (flags >> 8) & 0xFF;
+    buffer[ret ++] = (flags >> 16) & 0xFF;
+    buffer[ret ++] = (flags >> 24) & 0xFF;
 
-    buffer[ret ++] = u4_3 & 0xFF;
-    buffer[ret ++] = (u4_3 >> 8) & 0xFF;
-    buffer[ret ++] = (u4_3 >> 16) & 0xFF;
-    buffer[ret ++] = (u4_3 >> 24) & 0xFF;
-
-    buffer[ret ++] = u2_1 & 0xFF;
-    buffer[ret ++] = (u2_1 >> 8) & 0xFF;
-    buffer[ret ++] = class;
-    buffer[ret ++] = id;
+    memmove(buffer + ret, data, len);
+    ret += len;
 
     ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
     ret += 2;
-    assert(ret == 24);
 
     return ret;
 }
@@ -514,7 +519,7 @@ ublox_pkt_create_cfg_bds (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_
 #if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
 #include <ciut.h>
 
-TEST_CASE( .name="ublox-ext-bds", .description="Test ublox ublox_pkt_create_cfg_bds functions." ) {
+TEST_CASE( .name="ublox-bds", .description="Test ublox ublox_pkt_create_cfg_bds functions." ) {
     uint8_t buffer[30];
     SECTION("test ublox ublox_pkt_create_cfg_bds") {
         CIUT_LOG ("check ublox_pkt_create_cfg_bds %d", 0);
@@ -787,12 +792,13 @@ ublox_pkt_create_set_cfgrate (uint8_t *buffer, size_t sz_buf, uint16_t measRate,
 
 TEST_CASE( .name="ublox-ext", .description="Test ublox ublox_pkt_create_get_version functions." ) {
     uint8_t buffer[30];
-    SECTION("test ublox ublox_pkt_create_dbg_set") {
-        CIUT_LOG ("check ublox_pkt_create_dbg_set %d", 0);
+    SECTION("test ublox ublox_pkt_create_upd_downl") {
+        CIUT_LOG ("check ublox_pkt_create_upd_downl %d", 0);
 
         REQUIRE(sizeof(buffer) > 24);
         //# RAW  b5 62 09 01 10 00 c8 16 00 00 00 00 00 00 97 69 21 00 00 00 02 10 2b 22
-        REQUIRE(24 == ublox_pkt_create_dbg_set(buffer, sizeof(buffer), 0x000016C8, 0x00000000, 0x00216997, 0x0000, UBX_RXM_RAW >> 8, UBX_RXM_RAW & 0xFF));
+        char hex_1[] = {0x97, 0x69, 0x21, 0x00, 0x00, 0x00, 0x02, 0x10};
+        REQUIRE(24 == ublox_pkt_create_upd_downl(buffer, sizeof(buffer), 0x000016C8, 0x00000000, hex_1, sizeof(hex_1)));
         CIUT_LOG("%d RAW buffer:", 0);
         hex_dump_to_fd(STDERR_FILENO, buffer, 24);
         REQUIRE(16 == UBLOX_PKG_LENGTH(buffer));
@@ -801,7 +807,8 @@ TEST_CASE( .name="ublox-ext", .description="Test ublox ublox_pkt_create_get_vers
         REQUIRE(*(buffer + 24-1) == 0x22);
 
         //# SFRB b5 62 09 01 10 00 0c 19 00 00 00 00 00 00 83 69 21 00 00 00 02 11 5f f0
-        REQUIRE(24 == ublox_pkt_create_dbg_set(buffer, sizeof(buffer), 0x0000190C, 0x00000000, 0x00216983, 0x0000, UBX_RXM_SFRB >> 8, UBX_RXM_SFRB & 0xFF));
+        char hex_2[] = {0x83, 0x69, 0x21, 0x00, 0x00, 0x00, 0x02, 0x11};
+        REQUIRE(24 == ublox_pkt_create_upd_downl(buffer, sizeof(buffer), 0x0000190C, 0x00000000, hex_2, sizeof(hex_2)));
         CIUT_LOG("%d SFRB buffer:", 0);
         hex_dump_to_fd(STDERR_FILENO, buffer, 24);
         REQUIRE(16 == UBLOX_PKG_LENGTH(buffer));
@@ -844,7 +851,6 @@ TEST_CASE( .name="ublox-ext", .description="Test ublox ublox_pkt_create_get_vers
 
 }
 #endif /* CIUT_ENABLED */
-
 
 
 /*****************************************************************************/
@@ -924,7 +930,7 @@ ublox_pkt_expected_size(uint8_t * buffer_in, size_t sz_in)
         sz = 8 + 8 + buffer_in[6+6];
         break;
     case UBX_RXM_SFRB: sz=8+42; break;
-    case UBX_DBG_SET:  sz=8+16; break;
+    case UBX_UPD_DOWNL: sz=8+16; break;
     }
 
     return sz;
@@ -1155,7 +1161,6 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     case UBX_MON_HW2:
     {
         uint32_t val32;
-        uint16_t val16;
         fprintf(stderr, "ublox hardware version 2:\n");
 
         assert(count == 68);
@@ -1225,36 +1230,151 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     }
         break;
 
-    case UBX_DBG_SET:
+    case UBX_UPD_DOWNL:
     {
         uint32_t val32;
-        uint16_t val16;
+
+        fprintf(stderr, "ublox !UBX UPD-DOWNL:\n");
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tStartAddr: %08X\n", val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tFlags: %08X (%s)\n", val32, (val32?((val32 == 1)?"Download ACK":"Download NACK"):"Download"));
+        p += 4;
+
+        for (i = 0; p < buffer_in + 6 + count; i ++) {
+            fprintf(stderr, "\tdata[%d]: %02X\n", i, *p);
+            p += 1;
+        }
+    }
+        break;
+
+        case UBX_UPD_UPLOAD:
+        {
+            uint32_t val32;
+
+            fprintf(stderr, "ublox !UBX UPD-UPLOAD:\n");
+
+            val32 = U32_LE(p);
+            fprintf(stderr, "\tStartAddr: %08X\n", val32);
+            p += 4;
+
+            val32 = U32_LE(p);
+            fprintf(stderr, "\tSize: %d\n", val32);
+            p += 4;
+
+            val32 = U32_LE(p);
+            fprintf(stderr, "\tFlags: %08X (%s)\n", val32, (val32?((val32 == 1)?"Upload ACK":"Upload NACK"):"Upload"));
+            p += 4;
+
+            for (i = 0; p < buffer_in + 6 + count; i ++) {
+                fprintf(stderr, "\tdata[%d]: %02X\n", i, *p);
+                p += 1;
+            }
+        }
+        break;
+
+    case UBX_UPD_EXEC:
+    {
+        uint32_t val32;
+        assert(count == 8);
+
+        fprintf(stderr, "ublox !UBX UPD-EXEC:\n");
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tStartAddr: %08X\n", val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tFlags: %08X (%s%s%s%s%s)\n"
+                , val32
+                , ((val32 & 0x01)?"Execution,":"Do not Execute")
+                , ((val32 & 0x02)?"ACK,":"")
+                , ((val32 & 0x04)?"NACK,":"")
+                , ((val32 & 0x08)?"IRQs and FIQ enabled,":"IRQs and FIQ disabled")
+                , ((val32 & 0x10)?"Reset after execution":"")
+                );
+        p += 4;
+    }
+        break;
+
+    case UBX_UPD_MEMCPY:
+    {
+        uint32_t val32;
         assert(count == 16);
 
-        fprintf(stderr, "ublox !UBX DBG-SET:\n");
+        fprintf(stderr, "ublox !UBX UPD-MEMCPY:\n");
 
         val32 = U32_LE(p);
-        fprintf(stderr, "\tX4_1: %08X\n", val32);
+        fprintf(stderr, "\tStartAddr: %08X\n", val32);
         p += 4;
 
         val32 = U32_LE(p);
-        fprintf(stderr, "\tX4_2: %08X\n", val32);
+        fprintf(stderr, "\tDestAddr: %08X\n", val32);
         p += 4;
 
         val32 = U32_LE(p);
-        fprintf(stderr, "\tX4_3: %08X\n", val32);
+        fprintf(stderr, "\tSize: %08X\n", val32);
         p += 4;
 
-        val16 = U16_LE(p);
-        fprintf(stderr, "\tU2_1: %04X\n", val16);
-        p += 2;
+        val32 = U32_LE(p);
+        fprintf(stderr, "\tFlags: %08X (%s%s%s%s%s)\n"
+                , val32
+                , ((val32 & 0x01)?"Copy,":"Do not Copy")
+                , ((val32 & 0x02)?"ACK,":"")
+                , ((val32 & 0x04)?"NACK,":"")
+                , ((val32 & 0x09)?"IRQs and FIQ enabled,":"IRQs and FIQ disabled")
+                , ((val32 & 0x10)?"Reset after execution":"")
+               );
+        p += 4;
+    }
+        break;
 
-        fprintf(stderr, "\tclass: %02X\n", *p);
-        p += 1;
-
-        fprintf(stderr, "\tid: %02X\n", *p);
-        p += 1;
-
+    case UBX_UPD_SOS:
+    {
+        uint8_t val8;
+        if (count == 0) {
+            // query
+            fprintf(stderr, "\t(type): Poll Backup File Restore Status\n");
+            break;
+        }
+        val8 = *p;
+        switch (val8) {
+        case 0:
+            fprintf(stderr, "\t(type): Create Backup File in Flash\n");
+            fprintf(stderr, "\tcmd: %02X\n", *p);
+            p += 1;
+            // reserved
+            p += 3;
+            break;
+        case 1:
+            fprintf(stderr, "\t(type): Clear Backup in Flash\n");
+            fprintf(stderr, "\tcmd: %02X\n", *p);
+            p += 1;
+            // reserved
+            p += 3;
+            break;
+        case 2:
+            fprintf(stderr, "\t(type): Backup File Creation Acknowledge\n");
+            fprintf(stderr, "\tcmd: %02X\n", *p);
+            p += 1;
+            // reserved
+            p += 3;
+            fprintf(stderr, "\tresponse: %02X(%s)\n", *p, (*p == 1)?"Acknowledged":"Not Acknowledged");
+            p += 1;
+            break;
+        case 3:
+            fprintf(stderr, "\t(type): System Restored from Backup\n");
+            fprintf(stderr, "\tcmd: %02X\n", *p);
+            p += 1;
+            // reserved
+            p += 3;
+            fprintf(stderr, "\tresponse: %02X(%s)\n", *p, (*p > 0)?(*p==1?"Failed restoring from backup file":(*p==2?"Restored from backup file":(*p==3?"Not restored (no backup)":""))):"Unknown");
+            p += 1;
+            break;
+        }
     }
         break;
 
@@ -1307,12 +1427,11 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
 
         fprintf(stderr, "\tmsgID: %02X\n", *p);
         p += 1;
+        fprintf(stderr, "\t(classid) %s\n", ublox_val2cstr_classid(*(p-2),*(p-1)));
 
-        i = 0;
-        for (; p - buffer_in - 6 < count; ) {
-            fprintf(stderr, "\trate[%d]: %02X\n", i, *p);
+        for (i = 0; p - buffer_in - 6 < count; i ++) {
+            fprintf(stderr, "\tout[%d]: %02X (%s:%s)\n", i, *p, ublox_val2cstr_portid(i), (*p==0?"OFF":"ON"));
             p += 1;
-            i ++;
         }
 
     }
@@ -1469,8 +1588,6 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     {
         uint32_t val32;
         int32_t vali32;
-        uint16_t val16;
-        int16_t vali16;
         assert(count == 20);
 
         val32 = U32_LE(p);
