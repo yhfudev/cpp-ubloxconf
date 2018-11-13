@@ -35,6 +35,29 @@
 #define hex_dump_to_fp(a,b,c)
 #endif
 
+//#define TD(...)
+//#define TI(...)
+#define TD printf
+#define TI printf
+#define TW printf
+#define TE printf
+
+#if !defined(DEBUG) || (DEBUG == 0)
+#undef TD
+#define TD(...)
+#undef TI
+#define TI(...)
+
+#if 0
+#undef TW
+#define TW(...)
+#undef TE
+#define TE(...)
+#endif // 0
+
+#endif // DEBUG
+
+
 #ifndef NUM_ARRAY
 #define NUM_ARRAY(a) (sizeof(a)/sizeof(a[0]))
 #endif
@@ -104,7 +127,7 @@ ubxcli_process_data (ubloxdata_client_t * ped, uv_stream_t *stream)
     assert (NULL != ped);
     assert (NULL != stream);
 
-    fprintf(stderr,"tcp cli ubxcli_process_data() BEGIN\n");
+    TD("tcp cli ubxcli_process_data() BEGIN\n");
     while(1) { // while (ped->sz_data > 0) {
         buffer_in = ped->buffer;
         sz_in = ped->sz_data;
@@ -112,10 +135,10 @@ ubxcli_process_data (ubloxdata_client_t * ped, uv_stream_t *stream)
         sz_processed = 0;
         sz_needed_in = 0;
 
-        fprintf(stderr,"tcp cli ubxcli_process_data() ped->sz_data=%" PRIuSZ "\n", ped->sz_data);
+        TD("tcp cli ubxcli_process_data() ped->sz_data=%" PRIuSZ "\n", ped->sz_data);
         assert (NULL != buffer_in);
         assert (sz_in >= 0);
-        fprintf(stderr,"tcp cli ubxcli_process_data() call ublox_pkt_nexthdr_ubx\n");
+        TD("tcp cli ubxcli_process_data() call ublox_pkt_nexthdr_ubx\n");
 
         ret = ublox_pkt_nexthdr_ubx(buffer_in, sz_in, &sz_processed, &sz_needed_in);
         if (sz_processed > 0) {
@@ -129,7 +152,7 @@ ubxcli_process_data (ubloxdata_client_t * ped, uv_stream_t *stream)
             ped->sz_data = sz_rest;
         }
         if (sz_needed_in > 0) {
-            fprintf(stderr, "need more data: %" PRIuSZ "\n", sz_needed_in);
+            TI( "need more data: %" PRIuSZ "\n", sz_needed_in);
             break;
         }
         if (ret < 0) {
@@ -153,7 +176,7 @@ ubxcli_process_data (ubloxdata_client_t * ped, uv_stream_t *stream)
                 ped->sz_data = sz_rest;
             }
             if (sz_needed_in > 0) {
-                fprintf(stderr, "need more data: %" PRIuSZ "\n", sz_needed_in);
+                TI( "need more data: %" PRIuSZ "\n", sz_needed_in);
                 break;
             }
             if (ret < 0) {
@@ -183,7 +206,7 @@ ubxcli_process_data (ubloxdata_client_t * ped, uv_stream_t *stream)
 void
 on_tcp_cli_close(uv_handle_t* handle)
 {
-    fprintf(stderr, "tcp cli closed.\n");
+    TI( "tcp cli closed.\n");
 }
 
 void
@@ -196,10 +219,10 @@ on_tcp_cli_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
         size_t sz_copy;
         size_t sz_processed;
 
-        fprintf(stderr,"tcp cli read block, size=%" PRIiSZ ":\n", nread);
+        TD("tcp cli read block, size=%" PRIiSZ ":\n", nread);
         hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buf->base), nread);
 
-        fprintf(stderr, "tcp cli process data 1\n");
+        TD( "tcp cli process data 1\n");
         ubxcli_process_data (&g_ubxcli, stream);
         sz_processed = 0;
         while (sz_processed < nread) {
@@ -208,38 +231,38 @@ on_tcp_cli_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             if (sz_copy + g_ubxcli.sz_data > sizeof(g_ubxcli.buffer)) {
                 sz_copy = sizeof(g_ubxcli.buffer) - g_ubxcli.sz_data;
             }
-            fprintf(stderr, "tcp cli push received data size=%" PRIuSZ ", processed=%" PRIuSZ "\n", sz_copy, sz_processed);
+            TD( "tcp cli push received data size=%" PRIuSZ ", processed=%" PRIuSZ "\n", sz_copy, sz_processed);
             if (sz_copy > 0) {
                 memmove (g_ubxcli.buffer + g_ubxcli.sz_data, buf->base + sz_processed, sz_copy);
                 sz_processed += sz_copy;
                 g_ubxcli.sz_data += sz_copy;
             } else {
                 // error? full?
-                fprintf(stderr, "tcp cli no more received data to be push\n");
+                TI( "tcp cli no more received data to be push\n");
                 break;
             }
-            fprintf(stderr, "tcp cli process data 2\n");
+            TD( "tcp cli process data 2\n");
             ubxcli_process_data (&g_ubxcli, stream);
         }
         if (sz_processed < nread) {
             // we're stalled here, because the content can't be processed by the function ubxcli_process_data()
             // error
-            fprintf(stderr, "tcp cli data stalled\n");
+            TD( "tcp cli data stalled\n");
             //uv_close((uv_handle_t *)stream, on_tcp_cli_close);
         }
     }
     if (nread == 0) {
-        fprintf(stderr,"tcp cli read zero!\n");
+        TI("tcp cli read zero!\n");
     }
     if (nread < 0) {
         //we got an EOF
-        fprintf(stderr,"tcp cli read EOF!\n");
+        TI("tcp cli read EOF!\n");
         uv_close((uv_handle_t*)stream, on_tcp_cli_close);
     }
 
     free(buf->base);
     if (g_ubxcli.num_responds >= g_ubxcli.num_requests) {
-        fprintf(stderr,"tcp cli received responses(%" PRIuSZ ") exceed requests(%" PRIuSZ ")!\n", g_ubxcli.num_responds, g_ubxcli.num_requests);
+        TI("tcp cli received responses(%" PRIuSZ ") exceed requests(%" PRIuSZ ")!\n", g_ubxcli.num_responds, g_ubxcli.num_requests);
         uv_close((uv_handle_t*)stream, on_tcp_cli_close);
         raise(SIGINT); // send signal and handle by uv_signal_cb
     }
@@ -249,11 +272,11 @@ void
 on_tcp_cli_write_end(uv_write_t* req, int status)
 {
     if (status) {
-        fprintf(stderr, "tcp cli write error %s.\n", uv_strerror(status));
+        TI( "tcp cli write error %s.\n", uv_strerror(status));
         uv_close(req->handle, on_tcp_cli_close);
         return;
     } else {
-        fprintf(stderr, "tcp cli write successfull.\n");
+        TI( "tcp cli write successfull.\n");
     }
     write_buf_free(req);
 }
@@ -274,7 +297,7 @@ send_buffer(uv_stream_t* stream, uint8_t *buffer1, size_t szbuf)
     r = uv_write(wbuf, stream, &(wbuf->buf), 1, on_tcp_cli_write_end);
     if (r) {
         /* error */
-        fprintf(stderr, "tcp cli error in write() %s\n", uv_strerror(r));
+        TE( "tcp cli error in write() %s\n", uv_strerror(r));
     }
 }
 
@@ -387,7 +410,7 @@ ublox_classid_cstr2val(char * buf, size_t size, uint8_t * p_class, uint8_t *p_id
     p = strchr(buf, '-');
     if ((NULL == p) || (buf + size <= p)) {
         // not found
-        fprintf(stderr, "warning: not found UBX class-id separator\n");
+        TW( "warning: not found UBX class-id separator\n");
         return -1;
     }
     memset(buffer, 0, sizeof(buffer));
@@ -397,13 +420,13 @@ ublox_classid_cstr2val(char * buf, size_t size, uint8_t * p_class, uint8_t *p_id
 
     if (0 > pf_bsearch_r (list_class, NUM_ARRAY(list_class), pf_bsearch_cb_comp_cstrval, buffer, &idx1)) {
         // not found
-        fprintf(stderr, "warning: not found UBX class '%s'\n", buffer);
+        TW( "warning: not found UBX class '%s'\n", buffer);
         return -1;
     }
     *p_class = list_class[idx1].val;
     if (0 > pf_bsearch_r (ublox_class_id[idx1].cstrval, ublox_class_id[idx1].sz_val, pf_bsearch_cb_comp_cstrval, p+1, &idx2)) {
         // not found
-        fprintf(stderr, "warning: not found UBX class '%s', id '%s'\n", buffer, p+1);
+        TW( "warning: not found UBX class '%s', id '%s'\n", buffer, p+1);
         return -1;
     }
     *p_id = ublox_class_id[idx1].cstrval[idx2].val;
@@ -455,7 +478,7 @@ parse_dec_array_string(const char *cstr_in, size_t len_cstr, char * buffer_out, 
             break;
         }
         if (sz_bufout < i) {
-            fprintf(stderr, "output buffer size too small: '%d' at pos=%d\n", sz_bufout, i);
+            TE( "output buffer size too small: '%d' at pos=%d\n", sz_bufout, i);
             return -2;
         }
         // got value
@@ -483,7 +506,7 @@ parse_hex_array_string(const char *cstr_in, size_t len_cstr, char * buffer_out, 
             break;
         }
         if (sz_bufout < i) {
-            fprintf(stderr, "output buffer size too small: '%d' at pos=%d\n", sz_bufout, i);
+            TE( "output buffer size too small: '%d' at pos=%d\n", sz_bufout, i);
             return -2;
         }
         // got value
@@ -610,12 +633,12 @@ process_command_line_buf_ubloxhex(char * buf, size_t size, uint8_t * buf_out, si
 
     if (0 > ublox_classid_cstr2val(buffer, (p_end - buf), &class, &id)) {
         // not found
-        fprintf(stderr, "not found class: '%s'\n", buffer);
+        TW( "not found class: '%s'\n", buffer);
         return -1;
     }
 
     if (sz_bufout < 8) {
-        fprintf(stderr, "output buffer size too small: '%d'\n", sz_bufout);
+        TE( "output buffer size too small: '%d'\n", sz_bufout);
         return -2;
     }
     buf_out[0] = 0xB5;
@@ -623,7 +646,7 @@ process_command_line_buf_ubloxhex(char * buf, size_t size, uint8_t * buf_out, si
     p = p_end + 2;
     sz_ret = parse_hex_array_string(p, size - (p - buf), buf_out + 2, sz_bufout - 2 - 2);
     if (sz_ret < 0) {
-        fprintf(stderr, "output buffer size too small: '%d'\n", sz_bufout);
+        TE( "output buffer size too small: '%d'\n", sz_bufout);
         return -2;
     }
     // check the class,id,length
@@ -660,12 +683,13 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
 
 #define CSTR_CUR_COMMAND "!UBX"
     if (0 != STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
-        // not a rtklib ubx command
+        TW("not a rtklib ubx command\n");
         return -1;
     }
     // find the " "
     p_end = strchr(buf_in + sizeof(CSTR_CUR_COMMAND), ' ');
     if (NULL == p_end) {
+        TE("not found space ' '.\n");
         return -1;
     }
 
@@ -675,7 +699,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
 
     if (0 > ublox_classid_cstr2val(buf_prefix, strlen(buf_prefix), &class, &id)) {
         // not found
-        fprintf(stderr, "not found class: '%s'\n", buf_prefix);
+        TW( "not found class: '%s'\n", buf_prefix);
         return -1;
     }
     switch (UBLOX_CLASS_ID(class,id)) {
@@ -698,7 +722,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
 
         if (sscanf(p_end, "%d %d", &u4_1, &u4_2) != 2) {
             // error in scan the data
-            fprintf(stderr, "sscanf two numbers failed\n");
+            TE( "sscanf two numbers failed\n");
             ret = -1;
             break;
         }
@@ -726,11 +750,11 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
 
         len = parse_dec_array_string(p, sz_bufin - (p - buf_in), buf2, sizeof(buf2));
         if (len < 0) {
-            fprintf(stderr, "output buffer size too small: '%d'\n", sizeof(buf2));
+            TE( "output buffer size too small: '%d'\n", sizeof(buf2));
             ret = -2;
             break;
         }
-        fprintf(stderr, "ublox_pkt_create_upd_downl(0x%08X 0x%08X) from '%s'\n", u4_1, u4_2);
+        TD( "ublox_pkt_create_upd_downl(0x%08X 0x%08X) from '%s'\n", u4_1, u4_2);
         ret = ublox_pkt_create_upd_downl (buf_out, sz_bufout, u4_1, u4_2, buf2, len);
     }
         break;
@@ -745,7 +769,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
         unsigned int u4_6;
 
         sscanf(p_end, "%d %d %d %d %d %d", &u4_1, &u4_2, &u4_3, &u4_4, &u4_5, &u4_6);
-        fprintf(stderr, "ublox_pkt_create_cfg_bds(0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X) from '%s'\n", u4_1, u4_2, u4_3, u4_4, u4_5, u4_6, p_end);
+        TD( "ublox_pkt_create_cfg_bds(0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X) from '%s'\n", u4_1, u4_2, u4_3, u4_4, u4_5, u4_6, p_end);
         ret = ublox_pkt_create_cfg_bds (buf_out, sz_bufout, u4_1, u4_2, u4_3, u4_4, u4_5, u4_6);
     }
         break;
@@ -928,26 +952,26 @@ process_command_libuv(off_t pos, char * buf, size_t size, void *userdata)
     ssize_t ret = -1;
     uint8_t buffer1[200];
 
-    fprintf(stderr, "ubxcli process line: '%s'\n", buf);
+    TD( "ubxcli process line: '%s'\n", buf);
 
     ret = process_command_line_buf_rtklibarg(buf, size, buffer1, sizeof(buffer1));
     if (ret < 0) {
         ret = process_command_line_buf_ubloxhex(buf, size, buffer1, sizeof(buffer1));
     }
     if (ret < 0) {
-        fprintf(stderr, "tcp cli ignore line at pos(%ld): %s\n", pos, buf);
+        TI("tcp cli ignore line at pos(%ld): %s\n", pos, buf);
         return 0;
     }
 #if DEBUG
-    fprintf(stderr, "---------------------------------------------\n");
-    fprintf(stderr, "tcp cli created packet size=%" PRIiSZ ":\n", ret);
+    TD( "---------------------------------------------\n");
+    TD( "tcp cli created packet size=%" PRIiSZ ":\n", ret);
     hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), ret);
     {
         size_t sz_processed;
         size_t sz_needed_in;
         ublox_cli_verify_tcp(buffer1, ret, &sz_processed, &sz_needed_in);
     }
-    fprintf(stderr, "---------------------------------------------\n");
+    TD( "---------------------------------------------\n");
     assert (ret <= sizeof(buffer1));
 #endif
 
@@ -962,7 +986,7 @@ on_tcp_cli_connect(uv_connect_t* connection, int status)
 {
     uv_stream_t* stream = connection->handle;
 
-    fprintf(stderr, "tcp cli connected.\n");
+    TD("tcp cli connected.\n");
 
     read_file_lines (g_ubxcli.fn_execute, (void *)stream, process_command_libuv);
     uv_read_start(stream, alloc_buffer, on_tcp_cli_read);
@@ -981,7 +1005,7 @@ idle_cb (uv_idle_t *handle)
         flg_has_error = 1;
         uv_idle_stop(handle);
         uv_stop(uv_default_loop());
-        fprintf(stderr, "timeout: %d\n", (int)g_ubxcli.timeout);
+        TW("timeout: %d\n", (int)g_ubxcli.timeout);
     }
 }
 
@@ -1074,25 +1098,25 @@ process_command_stdout(off_t pos, char * buf, size_t size, void *userdata)
     ssize_t ret = -1;
     uint8_t buffer1[200];
 
-    fprintf(stderr, "ubxcli process line: '%s'\n", buf);
+    TD("ubxcli process line: '%s'\n", buf);
 
     ret = process_command_line_buf_rtklibarg(buf, size, buffer1, sizeof(buffer1));
     if (ret < 0) {
         ret = process_command_line_buf_ubloxhex(buf, size, buffer1, sizeof(buffer1));
     }
     if (ret < 0) {
-        fprintf(stderr, "tcp cli ignore line at pos(%ld): %s\n", pos, buf);
+        TI("tcp cli ignore line at pos(%ld): %s\n", pos, buf);
         return 0;
     }
-    fprintf(stderr, "---------------------------------------------\n");
-    fprintf(stderr, "tcp cli created packet size=%" PRIiSZ ":\n", ret);
+    TD("---------------------------------------------\n");
+    TD("tcp cli created packet size=%" PRIiSZ ":\n", ret);
     hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), ret);
     {
         size_t sz_processed;
         size_t sz_needed_in;
         ublox_cli_verify_tcp(buffer1, ret, &sz_processed, &sz_needed_in);
     }
-    fprintf(stderr, "---------------------------------------------\n");
+    TD("---------------------------------------------\n");
     return 0;
 }
 
@@ -1103,25 +1127,25 @@ process_command_stdout(off_t pos, char * buf, size_t size, void *userdata)
 void
 version (void)
 {
-    fprintf (stdout, "UBlox module configure utils\n");
-    fprintf (stdout, "Version %d.%d.%d\n", VER_MAJOR, VER_MINOR, VER_MOD);
-    fprintf (stdout, "Copyright (c) 2018 Y. Fu. All rights reserved.\n\n");
+    fprintf (stderr, "UBlox module configure utils\n");
+    fprintf (stderr, "Version %d.%d.%d\n", VER_MAJOR, VER_MINOR, VER_MOD);
+    fprintf (stderr, "Copyright (c) 2018 Y. Fu. All rights reserved.\n\n");
 }
 
 void
 help (char *progname)
 {
-    fprintf (stdout, "Usage: \n"
+    fprintf (stderr, "Usage: \n"
         "\t%s [-hv] [-r <host>[:port]] [commands...]\n"
         , basename(progname));
-    fprintf (stdout, "\nOptions:\n");
-    fprintf (stdout, "\t-r\tRemote host and port\n");
-    fprintf (stdout, "\t-e <cmd file>\tExecute the command lines in the file\n");
-    fprintf (stdout, "\t-t <timeout>\tThe seconds before quit, 0 - wait forever, default 30\n");
+    fprintf (stderr, "\nOptions:\n");
+    fprintf (stderr, "\t-r\tRemote host and port\n");
+    fprintf (stderr, "\t-e <cmd file>\tExecute the command lines in the file\n");
+    fprintf (stderr, "\t-t <timeout>\tThe seconds before quit, 0 - wait forever, default 30\n");
 
-    fprintf (stdout, "\t-h\tPrint this message.\n");
-    fprintf (stdout, "\t-v\tVerbose information.\n");
-    fprintf (stdout, "\nExamples: \n"
+    fprintf (stderr, "\t-h\tPrint this message.\n");
+    fprintf (stderr, "\t-v\tVerbose information.\n");
+    fprintf (stderr, "\nExamples: \n"
         "\t1. connect and display basic information\n"
         "\t\t%s -r localhost:23\n\n"
         "\t2. connect and execute command\n"
