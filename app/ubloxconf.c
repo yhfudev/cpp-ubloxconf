@@ -222,7 +222,7 @@ on_tcp_cli_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
         TD("tcp cli read block, size=%" PRIiSZ ":\n", nread);
         hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buf->base), nread);
 
-        TD( "tcp cli process data 1\n");
+        TD("tcp cli process data 1\n");
         ubxcli_process_data (&g_ubxcli, stream);
         sz_processed = 0;
         while (sz_processed < nread) {
@@ -231,7 +231,7 @@ on_tcp_cli_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             if (sz_copy + g_ubxcli.sz_data > sizeof(g_ubxcli.buffer)) {
                 sz_copy = sizeof(g_ubxcli.buffer) - g_ubxcli.sz_data;
             }
-            TD( "tcp cli push received data size=%" PRIuSZ ", processed=%" PRIuSZ "\n", sz_copy, sz_processed);
+            TD("tcp cli push received data size=%" PRIuSZ ", processed=%" PRIuSZ "\n", sz_copy, sz_processed);
             if (sz_copy > 0) {
                 memmove (g_ubxcli.buffer + g_ubxcli.sz_data, buf->base + sz_processed, sz_copy);
                 sz_processed += sz_copy;
@@ -241,13 +241,13 @@ on_tcp_cli_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                 TI( "tcp cli no more received data to be push\n");
                 break;
             }
-            TD( "tcp cli process data 2\n");
+            TD("tcp cli process data 2\n");
             ubxcli_process_data (&g_ubxcli, stream);
         }
         if (sz_processed < nread) {
             // we're stalled here, because the content can't be processed by the function ubxcli_process_data()
             // error
-            TD( "tcp cli data stalled\n");
+            TD("tcp cli data stalled\n");
             //uv_close((uv_handle_t *)stream, on_tcp_cli_close);
         }
     }
@@ -581,8 +581,12 @@ TEST_CASE( .name="ublox-parse_dec_array_string", .description="Test parse_dec_ar
 }
 #endif /* CIUT_ENABLED */
 
+// is space between items
+#define IS_SPACE(a) ( isblank(a) || ('\t' == (a)) || ('\r' == (a)) || ('\n' == (a)) || (0 == (a)) )
+//#define IS_SPACE(a) ( isblank(a) || ('\t' == (a)) || ('\r' == (a)) || ('\n' == (a)) )
 
-#define IS_BLANK(a) (isblank(a) || ('\t' == (a)) || ('\r' == (a)) || ('\n' == (a)))
+// is space, and not new line
+#define IS_BLANK(a) ( isblank(a) || ('\t' == (a)) )
 
 #if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
 #include <ciut.h>
@@ -590,9 +594,13 @@ TEST_CASE( .name="ublox-parse_dec_array_string", .description="Test parse_dec_ar
 TEST_CASE( .name="ublox-IS_BLANK", .description="Test IS_BLANK functions." ) {
     SECTION("test ublox IS_BLANK") {
         REQUIRE(IS_BLANK('\t'));
-        REQUIRE(IS_BLANK('\r'));
-        REQUIRE(IS_BLANK('\n'));
+        REQUIRE(! IS_BLANK('\r'));
+        REQUIRE(! IS_BLANK('\n'));
         REQUIRE(IS_BLANK(' '));
+        REQUIRE(IS_SPACE('\t'));
+        REQUIRE(IS_SPACE('\r'));
+        REQUIRE(IS_SPACE('\n'));
+        REQUIRE(IS_SPACE(' '));
         REQUIRE(isblank('\t'));
         REQUIRE(! isblank('\r'));
         REQUIRE(! isblank('\n'));
@@ -678,6 +686,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
     ssize_t ret = -1;
     uint8_t class;
     uint8_t id;
+    char *p = NULL;
     char *p_end = NULL;
     char buf_prefix[20];
 
@@ -687,14 +696,18 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
         return -1;
     }
     // find the " "
-    p_end = strchr(buf_in + sizeof(CSTR_CUR_COMMAND), ' ');
+    p_end = buf_in + sz_bufin;
+    p = buf_in + sizeof(CSTR_CUR_COMMAND);
+    while ((p < p_end) && IS_SPACE(*p)) p ++;
+    p_end = strchr(p, ' ');
     if (NULL == p_end) {
         TE("not found space ' '.\n");
-        return -1;
+        p_end = buf_in + sz_bufin;
     }
+    while ((p_end > p) && IS_SPACE(*(p_end-1))) p_end --;
 
     memset(buf_prefix, 0, sizeof(buf_prefix));
-    strncpy(buf_prefix, buf_in + sizeof(CSTR_CUR_COMMAND), p_end - buf_in - sizeof(CSTR_CUR_COMMAND));
+    strncpy(buf_prefix, p, p_end - p);
 #undef CSTR_CUR_COMMAND
 
     if (0 > ublox_classid_cstr2val(buf_prefix, strlen(buf_prefix), &class, &id)) {
@@ -702,6 +715,11 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
         TW( "not found class: '%s'\n", buf_prefix);
         return -1;
     }
+
+    p = p_end;
+    p_end = buf_in + sz_bufin;
+    while ((p_end > p) && IS_SPACE(*(p_end-1))) p_end --;
+
     switch (UBLOX_CLASS_ID(class,id)) {
     case UBX_MON_VER:
         ret = ublox_pkt_create_get_version (buf_out, sz_bufout);
@@ -717,34 +735,38 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
         unsigned int u4_1;
         unsigned int u4_2;
         ssize_t len;
-        char *p;
         char buf2[40];
 
-        if (sscanf(p_end, "%d %d", &u4_1, &u4_2) != 2) {
+        if (sscanf(p, "%d %d", &u4_1, &u4_2) != 2) {
             // error in scan the data
             TE( "sscanf two numbers failed\n");
             ret = -1;
             break;
         }
-        p = p_end;
-        while (IS_BLANK(*p) && p < buf_in + sz_bufin) p ++;
-        if (p >= buf_in + sz_bufin) {
+
+        // skip previous blanks
+        while (IS_BLANK(*p) && p < p_end) p ++;
+        if (p >= p_end) {
             break;
         }
-        p = strchr(p, ' ');
-        if (NULL == p) {
+        // skip the first value u4_1
+        while (! IS_BLANK(*p) && p < p_end) p ++;
+        if (p >= p_end) {
             break;
         }
-        while (IS_BLANK(*p) && p < buf_in + sz_bufin) p ++;
-        if (p >= buf_in + sz_bufin) {
+        // skip the spaces
+        while (IS_BLANK(*p) && p < p_end) p ++;
+        if (p >= p_end) {
             break;
         }
-        p = strchr(p, ' ');
-        if (NULL == p) {
+        // skip the second value u4_2
+        while (! IS_BLANK(*p) && p < p_end) p ++;
+        if (p >= p_end) {
             break;
         }
-        while (IS_BLANK(*p) && p < buf_in + sz_bufin) p ++;
-        if (p >= buf_in + sz_bufin) {
+        // skip the spaces
+        while (IS_BLANK(*p) && p < p_end) p ++;
+        if (p >= p_end) {
             break;
         }
 
@@ -754,7 +776,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
             ret = -2;
             break;
         }
-        TD( "ublox_pkt_create_upd_downl(0x%08X 0x%08X) from '%s'\n", u4_1, u4_2);
+        TD("ublox_pkt_create_upd_downl(0x%08X 0x%08X) from '%s'\n", u4_1, u4_2);
         ret = ublox_pkt_create_upd_downl (buf_out, sz_bufout, u4_1, u4_2, buf2, len);
     }
         break;
@@ -769,7 +791,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
         unsigned int u4_6;
 
         sscanf(p_end, "%d %d %d %d %d %d", &u4_1, &u4_2, &u4_3, &u4_4, &u4_5, &u4_6);
-        TD( "ublox_pkt_create_cfg_bds(0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X) from '%s'\n", u4_1, u4_2, u4_3, u4_4, u4_5, u4_6, p_end);
+        TD("ublox_pkt_create_cfg_bds(0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X) from '%s'\n", u4_1, u4_2, u4_3, u4_4, u4_5, u4_6, p_end);
         ret = ublox_pkt_create_cfg_bds (buf_out, sz_bufout, u4_1, u4_2, u4_3, u4_4, u4_5, u4_6);
     }
         break;
@@ -777,18 +799,17 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
     case UBX_CFG_MSG:
     {
         int i;
-        char *p;
         uint8_t buf1[8];
         memset(buf1, 0, sizeof(buf1));
-        p = p_end-1;
+
         for (i = 0; i < 8; i ++) {
-            p = strchr(p, ' ');
-            if (NULL != p) {
-                while (*p == ' ') p ++;
-                buf1[i] = atoi(p);
-            } else {
+            // skip the spaces
+            while (IS_BLANK(*p) && p < p_end) p ++;
+            if (p >= p_end) {
                 break;
             }
+            buf1[i] = atoi(p);
+            while (! IS_BLANK(*p) && p < p_end) p ++;
         }
         if (i < 2) {
             // error
@@ -797,24 +818,28 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
         ret = ublox_pkt_create_set_cfgmsg (buf_out, sz_bufout, buf1[0], buf1[1], buf1 + 2, i - 2);
     }
         break;
+
     case UBX_CFG_PRT:
     {
         unsigned int portID = 0xFF;
 
         int i;
-        char *p;
+        char *p1 = p;
 
-        p = p_end-1;
         for (i = 0; i < 6; i ++) {
-            p = strchr(p, ' ');
-            if (NULL != p) {
-                while (*p == ' ') p ++;
-            } else {
+            // skip the spaces
+            while (IS_BLANK(*p) && p < p_end) p ++;
+            if (p >= p_end) {
                 break;
             }
-            if (portID == 0xFF) {
-                portID = atoi(p);
+            if (i == 0) {
+                assert (portID == 0xFF);
+                if (1 != sscanf(p, "%d", &portID)) {
+                    assert (portID == 0xFF);
+                    break;
+                }
             }
+            while (! IS_BLANK(*p) && p < p_end) p ++;
         }
         if (i < 6) {
             // get conf
@@ -826,24 +851,24 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
             unsigned int inProtoMask;
             unsigned int outProtoMask;
             unsigned int reserved;
-            sscanf(p_end, "%d %d %d %d %d %d", &portID, &txReady, &mode, &baudRate, &inProtoMask, &outProtoMask);
+            sscanf(p1, "%d %d %d %d %d %d", &portID, &txReady, &mode, &baudRate, &inProtoMask, &outProtoMask);
             ret = ublox_pkt_create_set_cfgprt (buf_out, sz_bufout, portID, txReady, mode, baudRate, inProtoMask, outProtoMask);
         }
     }
         break;
+
     case UBX_CFG_RATE:
     {
         int i;
-        char *p;
+        char *p1 = p;
 
-        p = p_end-1;
         for (i = 0; i < 3; i ++) {
-            p = strchr(p, ' ');
-            if (NULL != p) {
-                while (*p == ' ') p ++;
-            } else {
+            // skip the spaces
+            while (IS_BLANK(*p) && p < p_end) p ++;
+            if (p >= p_end) {
                 break;
             }
+            while (! IS_BLANK(*p) && p < p_end) p ++;
         }
         if (i < 3) {
             // get conf
@@ -852,7 +877,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
             unsigned int measRate;
             unsigned int navRate;
             unsigned int timeRef;
-            sscanf(p_end, "%d %d %d", &measRate, &navRate, &timeRef);
+            sscanf(p1, "%d %d %d", &measRate, &navRate, &timeRef);
             ret = ublox_pkt_create_set_cfgrate (buf_out, sz_bufout, measRate, navRate, timeRef);
         }
     }
@@ -930,6 +955,127 @@ TEST_CASE( .name="ublox-process_command_line_buf_rtklibarg", .description="Test 
 #undef CSTR_CMD
 #undef CSTR_HEX
     }
+
+    SECTION("test process_command_line_buf_rtklibarg") {
+#define CSTR_CMD "!UBX CFG-MSG 3 15 0 1 0 1 0 0"
+#define CSTR_HEX "b5 62 06 01 08 00 03 0F 00 01 00 01 00 00 23 2C"
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        CIUT_LOG("----------------\n", 0);
+        CIUT_LOG("buffer1:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("buffer2:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("----------------", 0);
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+
+    SECTION("test process_command_line_buf_rtklibarg without arguments") {
+#define CSTR_CMD "!UBX MON-VER"
+#define CSTR_HEX "b5 62 0A 04 00 00 0e 34"
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        CIUT_LOG("----------------\n", 0);
+        CIUT_LOG("buffer1:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("buffer2:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("----------------", 0);
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+    SECTION("test process_command_line_buf_rtklibarg without arguments") {
+#define CSTR_CMD "!UBX MON-HW "
+#define CSTR_HEX "b5 62 0A 09 00 00 13 43"
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        CIUT_LOG("----------------\n", 0);
+        CIUT_LOG("buffer1:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("buffer2:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("----------------", 0);
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+    SECTION("test process_command_line_buf_rtklibarg without arguments") {
+#define CSTR_CMD "!UBX \t  CFG-RATE \r\n"
+#define CSTR_HEX "b5 62 06 08 00 00 0e 30"
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        CIUT_LOG("----------------\n", 0);
+        CIUT_LOG("buffer1:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("buffer2:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("----------------", 0);
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+    SECTION("test process_command_line_buf_rtklibarg without arguments") {
+#define CSTR_CMD "!UBX CFG-PRT "
+#define CSTR_HEX "b5 62 06 00 00 00 06 18"
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        CIUT_LOG("----------------\n", 0);
+        CIUT_LOG("buffer1:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("buffer2:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("----------------", 0);
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+    SECTION("test process_command_line_buf_rtklibarg without arguments") {
+#define CSTR_CMD "!UBX CFG-PRT  1 "
+#define CSTR_HEX "b5 62 06 00 01 00 01 08 22"
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        CIUT_LOG("----------------\n", 0);
+        CIUT_LOG("buffer1:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("buffer2:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("----------------", 0);
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+    SECTION("test process_command_line_buf_rtklibarg without arguments") {
+#define CSTR_CMD "!UBX CFG-PRT    \t  2  "
+#define CSTR_HEX "b5 62 06 00 01 00 02 09 23"
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        CIUT_LOG("----------------\n", 0);
+        CIUT_LOG("buffer1:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("buffer2:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("----------------", 0);
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
 }
 #endif /* CIUT_ENABLED */
 
@@ -952,7 +1098,7 @@ process_command_libuv(off_t pos, char * buf, size_t size, void *userdata)
     ssize_t ret = -1;
     uint8_t buffer1[200];
 
-    TD( "ubxcli process line: '%s'\n", buf);
+    TD("ubxcli process line: '%s'\n", buf);
 
     ret = process_command_line_buf_rtklibarg(buf, size, buffer1, sizeof(buffer1));
     if (ret < 0) {
@@ -963,15 +1109,15 @@ process_command_libuv(off_t pos, char * buf, size_t size, void *userdata)
         return 0;
     }
 #if DEBUG
-    TD( "---------------------------------------------\n");
-    TD( "tcp cli created packet size=%" PRIiSZ ":\n", ret);
+    TD("---------------------------------------------\n");
+    TD("tcp cli created packet size=%" PRIiSZ ":\n", ret);
     hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), ret);
     {
         size_t sz_processed;
         size_t sz_needed_in;
         ublox_cli_verify_tcp(buffer1, ret, &sz_processed, &sz_needed_in);
     }
-    TD( "---------------------------------------------\n");
+    TD("---------------------------------------------\n");
     assert (ret <= sizeof(buffer1));
 #endif
 
