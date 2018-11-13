@@ -790,7 +790,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
         unsigned int u4_5;
         unsigned int u4_6;
 
-        sscanf(p_end, "%d %d %d %d %d %d", &u4_1, &u4_2, &u4_3, &u4_4, &u4_5, &u4_6);
+        sscanf(p, "%d %d %d %d %d %d", &u4_1, &u4_2, &u4_3, &u4_4, &u4_5, &u4_6);
         TD("ublox_pkt_create_cfg_bds(0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X) from '%s'\n", u4_1, u4_2, u4_3, u4_4, u4_5, u4_6, p_end);
         ret = ublox_pkt_create_cfg_bds (buf_out, sz_bufout, u4_1, u4_2, u4_3, u4_4, u4_5, u4_6);
     }
@@ -894,8 +894,8 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
 #include <ciut.h>
 //ssize_t process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, size_t sz_bufout);
 TEST_CASE( .name="ublox-process_command_line_buf_rtklibarg", .description="Test process_command_line_buf_rtklibarg functions." ) {
-    char buffer1[30];
-    char buffer2[30];
+    char buffer1[50];
+    char buffer2[50];
     SECTION("test process_command_line_buf_rtklibarg") {
 #define CSTR_CMD "!UBX UPD-DOWNL 4060 0   35 204 33 0 0 0 2 16"
 #define CSTR_HEX "b5 62 09 01 10 00 dc 0f 00 00 00 00 00 00 23 cc 21 00 00 00 02 10 27 0e"
@@ -1062,6 +1062,23 @@ TEST_CASE( .name="ublox-process_command_line_buf_rtklibarg", .description="Test 
     SECTION("test process_command_line_buf_rtklibarg without arguments") {
 #define CSTR_CMD "!UBX CFG-PRT    \t  2  "
 #define CSTR_HEX "b5 62 06 00 01 00 02 09 23"
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        CIUT_LOG("----------------\n", 0);
+        CIUT_LOG("buffer1:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("buffer2:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("----------------", 0);
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+    SECTION("test process_command_line_buf_rtklibarg without arguments") {
+#define CSTR_CMD "!UBX CFG-BDS 0  0    31  4294967295  0  0"
+#define CSTR_HEX "B5 62 06 4A 18 00 00 00 00 00 00 00 00 00 1F 00 00 00 FF FF FF FF 00 00 00 00 00 00 00 00 83 AC"
 
         REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
         REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
