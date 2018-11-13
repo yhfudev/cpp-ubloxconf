@@ -692,7 +692,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
 
 #define CSTR_CUR_COMMAND "!UBX"
     if (0 != STRCMP_STATIC (buf_in, CSTR_CUR_COMMAND)) {
-        TW("not a rtklib ubx command\n");
+        TI("not a rtklib ubx command\n");
         return -1;
     }
     // find the " "
@@ -701,7 +701,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
     while ((p < p_end) && IS_SPACE(*p)) p ++;
     p_end = strchr(p, ' ');
     if (NULL == p_end) {
-        TE("not found space ' '.\n");
+        TI("not found space ' '.\n");
         p_end = buf_in + sz_bufin;
     }
     while ((p_end > p) && IS_SPACE(*(p_end-1))) p_end --;

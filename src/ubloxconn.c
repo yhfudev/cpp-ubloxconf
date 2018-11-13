@@ -1048,14 +1048,20 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
 
     p = buffer_in + 6;
 
+    fprintf(stdout, "ublox %s:\n", ublox_val2cstr_classid(buffer_in[2], buffer_in[3]));
     switch (classid) {
     case UBX_MON_VER:
     {
         char buf[40];
         assert(sizeof(buf)-1 >= 30);
-        fprintf(stdout, "ublox firmware version:\n");
-        if (count <= 0) {
+        //fprintf(stdout, "ublox firmware version:\n");
+
+        if (count == 0) {
+            // query
+            fprintf(stdout, "\t(type): Poll Receiver/Software Version\n");
             break;
+        } else {
+            fprintf(stdout, "\t(type): Receiver/Software Version\n");
         }
 
 #define LEN_SEG 30
@@ -1109,8 +1115,15 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     {
         uint32_t val32;
         uint16_t val16;
-        fprintf(stdout, "ublox hardware version:\n");
+        //fprintf(stdout, "ublox hardware version:\n");
 
+        if (count == 0) {
+            // query
+            fprintf(stdout, "\t(type): Poll Hardware Status\n");
+            break;
+        } else {
+            fprintf(stdout, "\t(type): Hardware Status\n");
+        }
         assert(count == 68);
 
         val32 = U32_LE(p);
@@ -1181,8 +1194,15 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     case UBX_MON_HW2:
     {
         uint32_t val32;
-        fprintf(stdout, "ublox hardware version 2:\n");
+        //fprintf(stdout, "ublox hardware version 2:\n");
 
+        if (count == 0) {
+            // query
+            fprintf(stdout, "\t(type): Poll Extended Hardware Status\n");
+            break;
+        } else {
+            fprintf(stdout, "\t(type): Extended Hardware Status\n");
+        }
         assert(count == 68);
 
         fprintf(stdout, "\tofsI: %d\n", *((char *)p) );
@@ -1226,7 +1246,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     {
         assert(count == 2);
 
-        fprintf(stdout, "ublox ACK:\n");
+        //fprintf(stdout, "ublox ACK:\n");
 
         fprintf(stdout, "\tclsID: %02X\n", *p);
         p += 1;
@@ -1240,7 +1260,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     {
         assert(count == 2);
 
-        fprintf(stdout, "ublox NAK:\n");
+        //fprintf(stdout, "ublox NAK:\n");
 
         fprintf(stdout, "\tclsID: %02X\n", *p);
         p += 1;
@@ -1254,7 +1274,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     {
         uint32_t val32;
 
-        fprintf(stdout, "ublox !UBX UPD-DOWNL:\n");
+        //fprintf(stdout, "ublox !UBX UPD-DOWNL:\n");
 
         val32 = U32_LE(p);
         fprintf(stdout, "\tStartAddr: %08X\n", val32);
@@ -1271,29 +1291,29 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     }
         break;
 
-        case UBX_UPD_UPLOAD:
-        {
-            uint32_t val32;
+    case UBX_UPD_UPLOAD:
+    {
+        uint32_t val32;
 
-            fprintf(stdout, "ublox !UBX UPD-UPLOAD:\n");
+        //fprintf(stdout, "ublox !UBX UPD-UPLOAD:\n");
 
-            val32 = U32_LE(p);
-            fprintf(stdout, "\tStartAddr: %08X\n", val32);
-            p += 4;
+        val32 = U32_LE(p);
+        fprintf(stdout, "\tStartAddr: %08X\n", val32);
+        p += 4;
 
-            val32 = U32_LE(p);
-            fprintf(stdout, "\tSize: %d\n", val32);
-            p += 4;
+        val32 = U32_LE(p);
+        fprintf(stdout, "\tSize: %d\n", val32);
+        p += 4;
 
-            val32 = U32_LE(p);
-            fprintf(stdout, "\tFlags: %08X (%s)\n", val32, (val32?((val32 == 1)?"Upload ACK":"Upload NACK"):"Upload"));
-            p += 4;
+        val32 = U32_LE(p);
+        fprintf(stdout, "\tFlags: %08X (%s)\n", val32, (val32?((val32 == 1)?"Upload ACK":"Upload NACK"):"Upload"));
+        p += 4;
 
-            for (i = 0; p < buffer_in + 6 + count; i ++) {
-                fprintf(stdout, "\tdata[%d]: %02X\n", i, *p);
-                p += 1;
-            }
+        for (i = 0; p < buffer_in + 6 + count; i ++) {
+            fprintf(stdout, "\tdata[%d]: %02X\n", i, *p);
+            p += 1;
         }
+    }
         break;
 
     case UBX_UPD_EXEC:
@@ -1301,7 +1321,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         uint32_t val32;
         assert(count == 8);
 
-        fprintf(stdout, "ublox !UBX UPD-EXEC:\n");
+        //fprintf(stdout, "ublox !UBX UPD-EXEC:\n");
 
         val32 = U32_LE(p);
         fprintf(stdout, "\tStartAddr: %08X\n", val32);
@@ -1325,7 +1345,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         uint32_t val32;
         assert(count == 16);
 
-        fprintf(stdout, "ublox !UBX UPD-MEMCPY:\n");
+        //fprintf(stdout, "ublox !UBX UPD-MEMCPY:\n");
 
         val32 = U32_LE(p);
         fprintf(stdout, "\tStartAddr: %08X\n", val32);
@@ -1355,6 +1375,8 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     case UBX_UPD_SOS:
     {
         uint8_t val8;
+        //fprintf(stdout, "ublox !UBX UPD-SOS:\n");
+
         if (count == 0) {
             // query
             fprintf(stdout, "\t(type): Poll Backup File Restore Status\n");
@@ -1403,7 +1425,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         uint32_t val32;
         assert(count == 24);
 
-        fprintf(stdout, "ublox !UBX CFG-BDS:\n");
+        //fprintf(stdout, "ublox !UBX CFG-BDS:\n");
 
         val32 = U32_LE(p);
         fprintf(stdout, "\tX4_1: %08X\n", val32);
@@ -1435,6 +1457,8 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     {
         assert(count >= 2);
 
+        //fprintf(stdout, "ublox !UBX CFG-MSG:\n");
+
         if (count == 2) {
             // query
             fprintf(stdout, "\t(type): Poll a message configuration\n");
@@ -1464,6 +1488,8 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         uint8_t portid;
         assert(count >= 0);
         assert(count <= 20);
+
+        //fprintf(stdout, "ublox !UBX CFG-PRT:\n");
 
         if (count == 0) {
             // query
@@ -1546,6 +1572,8 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         assert(count >= 0);
         assert(count <= 6);
 
+        //fprintf(stdout, "ublox !UBX CFG-RATE:\n");
+
         if (count == 0) {
             // query
             fprintf(stdout, "\t(type): Poll Navigation/Measurement Rate Settings\n");
@@ -1578,6 +1606,8 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         int16_t vali16;
         assert(count == 16);
 
+        //fprintf(stdout, "ublox !UBX NAV-TIMEGPS:\n");
+
         val32 = U32_LE(p);
         fprintf(stdout, "\tiTOW: %08X\n", val32);
         p += 4;
@@ -1609,6 +1639,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         uint32_t val32;
         int32_t vali32;
         assert(count == 20);
+        //fprintf(stdout, "ublox !UBX NAV-CLOCK:\n");
 
         val32 = U32_LE(p);
         fprintf(stdout, "\tiTOW: %08X\n", val32);
@@ -1646,6 +1677,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         int32_t vali32;
         uint16_t val16;
         int16_t vali16;
+        //fprintf(stdout, "ublox !UBX RXM-RAW:\n");
 
         // l4 iTOW
         val32 = U32_LE(p);
@@ -1707,6 +1739,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     case UBX_RXM_SFRB:
     {
         uint32_t val32;
+        //fprintf(stdout, "ublox !UBX RXM-SFRB:\n");
 
         // U1 chn
         fprintf(stdout, "\tchn: %02X\n", *p);
@@ -1727,6 +1760,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     {
         int numWords;
         uint32_t val32;
+        //fprintf(stdout, "ublox !UBX RXM-SFRBX:\n");
 
         // U1 gnssId
         fprintf(stdout, "\tgnssId: %02X\n", *p);
@@ -1770,6 +1804,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         double f8;
         uint16_t val16;
         int numMeas;
+        //fprintf(stdout, "ublox !UBX RXM-RAWX:\n");
 
         // R8 rcvTow
         memmove(&f8, p, sizeof(f8));
@@ -1872,6 +1907,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         int len;
         int type;
         type = *p;
+        //fprintf(stdout, "ublox !UBX TRK-D5:\n");
 
         fprintf(stdout, "\ttype: %d\n", type);
         switch(type) {
@@ -1920,6 +1956,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         int len;
         int nch; // number of channel
         nch = *(p + 2);
+        //fprintf(stdout, "ublox !UBX TRK-MEAS:\n");
 
         fprintf(stdout, "\tnch: %d\n", nch);
 
@@ -1957,6 +1994,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     case UBX_TRK_SFRBX:
     {
         int type;
+        //fprintf(stdout, "ublox !UBX TRK-SFRBX:\n");
         type = *(p+1);
         fprintf(stdout, "\ttype: %d\n", type);
         fprintf(stdout, "\tprn=%02X\n", (*(p+2)));
