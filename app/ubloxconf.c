@@ -336,28 +336,43 @@ ublox_classid_cstr2val(char * buf, size_t size, uint8_t * p_class, uint8_t *p_id
     };
     cstr_val_t list_id_cfg[] = {
         {"ANT", 0x13},
+        {"BATCH", 0x93},
         {"BDS", 0x4A},
         {"CFG", 0x09},
         {"DAT", 0x06},
+        {"DGNSS", 0x70},
+        {"DYNSEED", 0x85},
         {"EKF", 0x12}, //
         {"ESFGWT", 0x29}, //
+        {"ESRC", 0x60}, //
+        {"FIXSEED", 0x84},
         {"FXN", 0x0E},
+        {"GEOFENCE", 0x69},
+        {"GNSS", 0x3E},
+        {"HNR", 0x5C},
         {"INF", 0x02},
         {"ITFM", 0x39}, //
+        {"LOGFILTER", 0x47},
         {"MSG", 0x01},
         {"NAV5", 0x24},
         {"NAVX5", 0x23},
         {"NMEA", 0x17},
         {"NVS", 0x22}, //
+        {"ODO", 0x1E},
         {"PM", 0x32},
         {"PM2", 0x3B}, //
+        {"PMS", 0x86},
         {"PRT", 0x00},
+        {"PWR", 0x57},
         {"RATE", 0x08},
         {"RINV", 0x34},
+        {"RST", 0x04},
         {"RXM", 0x11},
         {"SBAS", 0x16},
+        {"SMGR", 0x62},
         {"TMODE", 0x1D}, //
         {"TMODE2", 0x3D}, //
+        {"TMODE3", 0x71},
         {"TP", 0x07},
         {"TP5", 0x31},
         {"USB", 0x1B},
@@ -377,22 +392,45 @@ ublox_classid_cstr2val(char * buf, size_t size, uint8_t * p_class, uint8_t *p_id
         {"UPLOAD", 0x02},
     };
     cstr_val_t list_id_nav[] = {
-        {"TIMEGPS", 0x20},
         {"CLOCK",   0x22},
         {"SVINFO",  0x30},
+        {"TIMEBDS", 0x24},
+        {"TIMEGAL", 0x25},
+        {"TIMEGLO", 0x23},
+        {"TIMEGPS", 0x20},
+        {"TIMELS",  0x26},
+        {"TIMEUTC", 0x21},
     };
 
     cstr_val_t list_class[] = {
+        {"ACK", 0x05},
+        {"AID", 0x0B},
         {"CFG", 0x06},
+        {"ESF", 0x10},
+        {"HNR", 0x28},
+        {"INF", 0x04},
+        {"LOG", 0x21},
+        {"MGA", 0x13},
         {"MON", 0x0A},
         {"NAV", 0x01},
+        {"RXM", 0x02},
+        {"SEC", 0x27},
         {"TRK", 0x03},
         {"UPD", 0x09},
     };
     record_cstr_val_t ublox_class_id[] = {
+        { NULL, 0, },
+        { NULL, 0, },
         { &list_id_cfg, NUM_ARRAY(list_id_cfg), },
+        { NULL, 0, },
+        { NULL, 0, },
+        { NULL, 0, },
+        { NULL, 0, },
+        { NULL, 0, },
         { &list_id_mon, NUM_ARRAY(list_id_mon), },
         { &list_id_nav, NUM_ARRAY(list_id_nav), },
+        { NULL, 0, },
+        { NULL, 0, },
         { &list_id_trk, NUM_ARRAY(list_id_trk), },
         { &list_id_upd, NUM_ARRAY(list_id_upd), },
     };
@@ -424,6 +462,10 @@ ublox_classid_cstr2val(char * buf, size_t size, uint8_t * p_class, uint8_t *p_id
         return -1;
     }
     *p_class = list_class[idx1].val;
+    if ((NULL == ublox_class_id[idx1].cstrval) || (ublox_class_id[idx1].sz_val < 1)) {
+        TW( "warning: UBX class '%s' is not setup\n", buffer);
+        return -1;
+    }
     if (0 > pf_bsearch_r (ublox_class_id[idx1].cstrval, ublox_class_id[idx1].sz_val, pf_bsearch_cb_comp_cstrval, p+1, &idx2)) {
         // not found
         TW( "warning: not found UBX class '%s', id '%s'\n", buffer, p+1);
@@ -461,6 +503,29 @@ TEST_CASE( .name="ublox-ublox_classid_cstr2val", .description="Test ublox_classi
 #define CSTR_CLASSID "CFG-USB"
         REQUIRE(0 <= ublox_classid_cstr2val(CSTR_CLASSID, sizeof(CSTR_CLASSID)-1, &class, &id));
         REQUIRE(class == 0x06 && id == 0x1B);
+
+#define CSTR_CLASSID "NAV-CLOCK"
+        REQUIRE(0 <= ublox_classid_cstr2val(CSTR_CLASSID, sizeof(CSTR_CLASSID)-1, &class, &id));
+        REQUIRE(class == 0x01 && id == 0x22);
+
+#define CSTR_CLASSID "NAV-TIMEGLO"
+        REQUIRE(0 <= ublox_classid_cstr2val(CSTR_CLASSID, sizeof(CSTR_CLASSID)-1, &class, &id));
+        REQUIRE(class == 0x01 && id == 0x23);
+    }
+    SECTION("test ublox ublox_classid_cstr2val non-exist") {
+        uint8_t class;
+        uint8_t id;
+
+        id = 0xFF;
+#define CSTR_CLASSID "NAV-AOPSTATUS"
+        REQUIRE(0 > ublox_classid_cstr2val(CSTR_CLASSID, sizeof(CSTR_CLASSID)-1, &class, &id));
+        REQUIRE(class == 0x01 && id == 0xFF);
+#define CSTR_CLASSID "ACK-ACK"
+        REQUIRE(0 > ublox_classid_cstr2val(CSTR_CLASSID, sizeof(CSTR_CLASSID)-1, &class, &id));
+        REQUIRE(class == 0x05 && id == 0xFF);
+#define CSTR_CLASSID "SEC-SIGN"
+        REQUIRE(0 > ublox_classid_cstr2val(CSTR_CLASSID, sizeof(CSTR_CLASSID)-1, &class, &id));
+        REQUIRE(class == 0x27 && id == 0xFF);
     }
 }
 #endif /* CIUT_ENABLED */
@@ -641,7 +706,7 @@ process_command_line_buf_ubloxhex(char * buf, size_t size, uint8_t * buf_out, si
 
     if (0 > ublox_classid_cstr2val(buffer, (p_end - buf), &class, &id)) {
         // not found
-        TW( "not found class: '%s'\n", buffer);
+        TW( "not found ubloxhex class: '%s'\n", buffer);
         return -1;
     }
 
@@ -712,7 +777,7 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
 
     if (0 > ublox_classid_cstr2val(buf_prefix, strlen(buf_prefix), &class, &id)) {
         // not found
-        TW( "not found class: '%s'\n", buf_prefix);
+        TW( "not found rtklibarg class: '%s'\n", buf_prefix);
         return -1;
     }
 
@@ -882,6 +947,66 @@ process_command_line_buf_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_ou
         }
     }
         break;
+//ssize_t ublox_pkt_create_set_cfg_gnss (uint8_t *buffer, size_t sz_buf, uint8_t msgVer, uint8_t numTrkChHw, uint8_t numTrkChUse, uint8_t numConfigBlocks, uint8_t *data);
+
+    case UBX_CFG_GNSS:
+    {
+        unsigned int msgVer;
+        unsigned int numTrkChHw;
+        unsigned int numTrkChUse;
+        unsigned int numConfigBlocks;
+
+        unsigned int gnssId;
+        unsigned int resTrkCh;
+        unsigned int maxTrkCh;
+        unsigned int reserved1;
+        unsigned int flags;
+        char buffer2[200];
+
+        int i;
+        int j;
+
+        if (4 != sscanf(p, "%d %d %d %d", &msgVer, &numTrkChHw, &numTrkChUse, &numConfigBlocks)) {
+            // error
+            TW("parse CFG-GNSS");
+            break;
+        }
+        for (j = 0; j < 4; j ++) {
+            // skip the spaces
+            while (IS_BLANK(*p) && p < p_end) p ++;
+            if (p >= p_end) {
+                break;
+            }
+            while (! IS_BLANK(*p) && p < p_end) p ++;
+        }
+        for (i = 0; i < numConfigBlocks; i ++) {
+            assert (8 * i <= sizeof(buffer2));
+            if (5 != sscanf(p, "%d %d %d %d %d", &gnssId, &resTrkCh, &maxTrkCh, &reserved1, &flags)) {
+                // error
+                TW("parse CFG-GNSS block");
+                break;
+            }
+            buffer2[8 * i + 0] = gnssId & 0xFF;
+            buffer2[8 * i + 1] = resTrkCh & 0xFF;
+            buffer2[8 * i + 2] = maxTrkCh & 0xFF;
+            buffer2[8 * i + 3] = 0;
+            buffer2[8 * i + 4] = flags & 0xFF;
+            buffer2[8 * i + 5] = (flags >> 8) & 0xFF;
+            buffer2[8 * i + 6] = (flags >> 16) & 0xFF;
+            buffer2[8 * i + 7] = (flags >> 24) & 0xFF;
+            for (j = 0; j < 5; j ++) {
+                // skip the spaces
+                while (IS_BLANK(*p) && p < p_end) p ++;
+                if (p >= p_end) {
+                    break;
+                }
+                while (! IS_BLANK(*p) && p < p_end) p ++;
+            }
+        }
+        ret = ublox_pkt_create_set_cfg_gnss (buf_out, sz_bufout, msgVer, numTrkChHw, numTrkChUse, numConfigBlocks, buffer2);
+    }
+        break;
+
     default:
         ret = -1;
         break;
@@ -1093,6 +1218,43 @@ TEST_CASE( .name="ublox-process_command_line_buf_rtklibarg", .description="Test 
 #undef CSTR_CMD
 #undef CSTR_HEX
     }
+
+    SECTION("test process_command_line_buf_rtklibarg") {
+#define CSTR_CMD "!UBX \t CFG-GNSS   0 32 32 1   6 16 16 0  65537   \r\n"
+#define CSTR_HEX "b5 62 06 3E 0C 00 00 20 20 01 06 10 10 00 01 00 01 00 B9 59"
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        CIUT_LOG("----------------\n", 0);
+        CIUT_LOG("buffer1:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("buffer2:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("----------------", 0);
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+    SECTION("test process_command_line_buf_rtklibarg") {
+#define CSTR_CMD "!UBX \t   CFG-GNSS 0 0 0 0   \r\n"
+#define CSTR_HEX "b5 62 06 3E 04 00 00 00 00 00 48 FA"
+
+        REQUIRE(sizeof(buffer1) >= (sizeof(CSTR_HEX) + 1)/3);
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == process_command_line_buf_rtklibarg(CSTR_CMD, sizeof(CSTR_CMD)-1, buffer1, sizeof(buffer1)));
+        REQUIRE((sizeof(CSTR_HEX) + 1)/3 == parse_hex_array_string(CSTR_HEX, sizeof(CSTR_HEX)-1, buffer2, sizeof(buffer2)));
+        CIUT_LOG("----------------\n", 0);
+        CIUT_LOG("buffer1:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("buffer2:", 0);
+        hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (sizeof(CSTR_HEX) + 1)/3);
+        CIUT_LOG("----------------", 0);
+        REQUIRE(0 == memcmp(buffer1, buffer2, (sizeof(CSTR_HEX) + 1)/3));
+#undef CSTR_CMD
+#undef CSTR_HEX
+    }
+
+
 }
 #endif /* CIUT_ENABLED */
 

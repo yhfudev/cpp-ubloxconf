@@ -78,6 +78,7 @@ ublox_val2cstr_classid(uint16_t class, uint16_t id)
         UBLOX_V2S(UBX_CFG_EKF);
         UBLOX_V2S(UBX_CFG_ESFGWT);
         UBLOX_V2S(UBX_CFG_FXN);
+        UBLOX_V2S(UBX_CFG_GNSS);
         UBLOX_V2S(UBX_CFG_INF);
         UBLOX_V2S(UBX_CFG_ITFM);
         UBLOX_V2S(UBX_CFG_MSG);
@@ -807,6 +808,50 @@ ublox_pkt_create_set_cfgrate (uint8_t *buffer, size_t sz_buf, uint16_t measRate,
     return ret;
 }
 
+ssize_t
+ublox_pkt_create_set_cfg_gnss (uint8_t *buffer, size_t sz_buf, uint8_t msgVer, uint8_t numTrkChHw, uint8_t numTrkChUse, uint8_t numConfigBlocks, uint8_t *data)
+{
+    uint16_t val16;
+    ssize_t ret = 0;
+
+    if (NULL == buffer) {
+        return -1;
+    }
+    if (sz_buf < 8 + 20) {
+        return -1;
+    }
+    assert (NULL != buffer);
+
+    // header
+    buffer[0] = 0xB5;
+    buffer[1] = 0x62;
+    // class
+    buffer[2] = 0x06;
+    // ID
+    buffer[3] = 0x3E;
+
+    // length, little endian
+    val16 = 4 + 8 * numConfigBlocks;
+    buffer[4] = val16 & 0xFF;
+    buffer[5] = (val16 >> 8) & 0xFF;
+
+    // payload
+    ret = 6;
+
+    buffer[ret ++] = msgVer;
+    buffer[ret ++] = numTrkChHw;
+    buffer[ret ++] = numTrkChUse;
+    buffer[ret ++] = numConfigBlocks;
+    memmove(buffer + ret, data, 8 * numConfigBlocks);
+    ret += (8 * numConfigBlocks);
+
+    ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
+    ret += 2;
+
+    return ret;
+}
+
+
 #if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
 #include <ciut.h>
 
@@ -957,9 +1002,9 @@ ublox_pkt_expected_size(uint8_t * buffer_in, size_t sz_in)
 }
 
 
-static char * ublox_val2cstr_gnss(int type)
+static char * ublox_val2cstr_gnss(int gnss)
 {
-    switch (type) {
+    switch (gnss) {
         case 0: return "GPS";
         case 1: return "SBS";
         case 2: return "GAL";
@@ -1450,6 +1495,46 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         val32 = U32_LE(p);
         fprintf(stdout, "\tX4_6: %08X\n", val32);
         p += 4;
+    }
+        break;
+
+    case UBX_CFG_GNSS:
+    {
+        uint32_t val32;
+        int num;
+        //fprintf(stdout, "ublox !UBX CFG-GNSS:\n");
+
+        fprintf(stdout, "\tmsgVer: %02X\n", *p);
+        p += 1;
+
+        fprintf(stdout, "\tnumTrkChHw: %d\n", *p);
+        p += 1;
+
+        fprintf(stdout, "\tnumTrkChUse: %d\n", *p);
+        p += 1;
+
+        num = *p;
+        fprintf(stdout, "\tnumConfigBlocks: %d\n", *p);
+        p += 1;
+
+        for (i = 0; i < num; i ++) {
+            fprintf(stdout, "\t[%d]\tgnssId: %0d\n", i, *p);
+            p += 1;
+            fprintf(stdout, "\t\tresTrkCh: %d\n", *p);
+            p += 1;
+            fprintf(stdout, "\t\tmaxTrkCh: %d\n", *p);
+            p += 1;
+            fprintf(stdout, "\t\treserved1: %02X\n", *p);
+            p += 1;
+
+            val32 = U32_LE(p);
+            fprintf(stdout, "\t\tflags: %08X (%s,sigCfgMask=%02X)\n"
+                    , val32
+                    , ((val32 & 0x01)?"Enabled":"Disabled")
+                    , ((val32 >> 16) & 0xFF)
+                   );
+            p += 4;
+        }
     }
         break;
 
@@ -1955,49 +2040,88 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
 
         int len;
         int nch; // number of channel
-        nch = *(p + 2);
+
         //fprintf(stdout, "ublox !UBX TRK-MEAS:\n");
 
-        fprintf(stdout, "\tnch: %d\n", nch);
+        val16 = U16_LE(p);
+        fprintf(stdout, "\tunknown: %d\n", val16);
+        p += 2;
 
+        val16 = U16_LE(p);
+        fprintf(stdout, "\tnch: %d (number of channels)\n", val16);
+        p += 2;
+        nch = val16;
+
+        p += 100;
         len = 56;
-        p += 104;
         for (i = 0; p < buffer_in + sz_in - 2; i ++, p += len) {
-            fprintf(stdout, "\t[%d]\tgnss=%s\n", i, ublox_val2cstr_gnss(*(p+4)));
+            fprintf(stdout, "\t[%d]:\t# %d\n", i, *p);
 
             /* quality indicator (0:idle,1:search,2:aquired,3:unusable, */
             /*                    4:code lock,5,6,7:code/carrier lock) */
             fprintf(stdout, "\t\tqi=%02X\n", (*(p+1)));
+            fprintf(stdout, "\t\tmesQI: %02X\n", *(p+2));
+            fprintf(stdout, "\t\tgnss: %s\n", ublox_val2cstr_gnss(*(p+4)));
+            fprintf(stdout, "\t\tsvid: %02X (satellite ID (PRN/slot number))\n", (*(p+5)));
 
-            fprintf(stdout, "\t\tprn=%02X\n", (*(p+5)));
+            fprintf(stdout, "\t\tfcn: %02X (GLO frequency channel number+7)\n", (*(p+7)));
+            fprintf(stdout, "\t\tstatus: %02X (tracking/lock status (bit3: half-cycle))\n", (*(p+8)));
 
-            memmove(&f8, p+24, sizeof(f8));
-            fprintf(stdout, "\t\tts: %f\n", f8); // transmission time
-
-            fprintf(stdout, "\t\tfrq=%02X\n", (*(p+7)));  // frequency
-            fprintf(stdout, "\t\tflag=%02X\n", (*(p+8))); // tracking status
-            fprintf(stdout, "\t\tlock1=%02X\n", (*(p+16))); // code lock count
-            fprintf(stdout, "\t\tlock2=%02X\n", (*(p+17))); // phase lock count
+            fprintf(stdout, "\t\tlock1: %02X (code lock count)\n", *(p+16));
+            fprintf(stdout, "\t\tlock2: %02X (carrier lock count)\n", *(p+17));
 
             val16 = U16_LE(p + 20);
-            fprintf(stdout, "\t\tsnr: %04X\n", val16);
+            fprintf(stdout, "\t\tcno: %04X (C/N0 (2^{-8} dBHz))\n", val16);
+
+            memmove(&f8, p+24, sizeof(f8));
+            fprintf(stdout, "\t\ttxTow: %f (transmission time in gps week (2^{-32} ms))\n", f8);
 
             memmove(&f8, p+32, sizeof(f8));
-            fprintf(stdout, "\t\tadr: %f\n", f8); // transmission time
+            fprintf(stdout, "\t\tadr: %f (accumulated Doppler range (2^{-32} cycle))\n", f8);
 
             memmove(&f4, p+40, sizeof(f4));
-            fprintf(stdout, "\t\tdop: %f\n", f4);
+            fprintf(stdout, "\t\tdop: %f (Doppler frequency (2^{-32}x10 Hz))\n", f4);
         }
     }
         break;
 
     case UBX_TRK_SFRBX:
     {
-        int type;
+        int gnss;
+
         //fprintf(stdout, "ublox !UBX TRK-SFRBX:\n");
-        type = *(p+1);
-        fprintf(stdout, "\ttype: %d\n", type);
-        fprintf(stdout, "\tprn=%02X\n", (*(p+2)));
+        fprintf(stdout, "\tunknown: %02X\n", *p);
+        p += 1;
+
+        gnss = *p;
+        fprintf(stdout, "\tgnss: %s\n", ublox_val2cstr_gnss(*p));
+        p += 1;
+        fprintf(stdout, "\tsvid: %02X (satellite ID (PRN/slot number))\n", *p);
+        p += 1;
+
+        p += 1;
+
+        fprintf(stdout, "\tfcn: %02X (GLO frequency channel number+7)\n", (*p));
+        p += 1;
+        switch (gnss) {
+        case 0: // "GPS"
+            // X4[10] GPS nav GPS LNAV subframe (24 bits x 10)
+            break;
+        case 1: // "SBS"
+            // X4[8] SBS nav SBAS message frame (226 bits)
+            break;
+        case 2: // "GAL"
+            break;
+        case 3: // beidou
+            // X4[10] BDS nav BDS D1/D2 subframe (26 bits x 10)
+            break;
+        case 5: // "QZS"
+            // X4[10] QZS nav QZSS LNAV subframe (24 bits x 10)
+            break;
+        case 6: // "GLO"
+            // X4[4] GLO nav GLO nav string with hamming (85 bits)
+            break;
+        }
 
     }
         break;
