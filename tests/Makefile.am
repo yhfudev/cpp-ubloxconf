@@ -78,7 +78,7 @@ ciutexec.c:
 	-echo "#endif" >> $@
 	-echo "#include <ciut.h>" >> $@
 	-echo "#include \"../src/ubloxconn.c\"" >> $@
-	-echo "#include \"../app/ubloxconf.c\"" >> $@
+	-echo "#include \"../src/ubloxcstr.c\"" >> $@
 	-echo "#include \"../app/utils.c\"" >> $@
 	-echo "int main(int argc, const char * argv[]) { return ciut_main(argc, argv); }" >> $@
 clean-local-check:

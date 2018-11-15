@@ -11,6 +11,7 @@
 #include <assert.h>
 
 #include "ubloxconn.h"
+#include "ubloxcstr.h"
 
 #if DEBUG
 #include "hexdump.h"
@@ -41,106 +42,6 @@
 #endif // 0
 
 #endif // DEBUG
-
-
-/*****************************************************************************/
-
-const char *
-ublox_val2cstr_classid(uint16_t class, uint16_t id)
-{
-#define UBLOX_V2S(a) case a: return #a
-    switch (UBLOX_CLASS_ID(class,id)) {
-        UBLOX_V2S(UBX_MON_HW);
-        UBLOX_V2S(UBX_MON_HW2);
-        UBLOX_V2S(UBX_MON_IO);
-        UBLOX_V2S(UBX_MON_MSGPP);
-        UBLOX_V2S(UBX_MON_RXBUF);
-        UBLOX_V2S(UBX_MON_RXR);
-        UBLOX_V2S(UBX_MON_TXBUF);
-        UBLOX_V2S(UBX_MON_VER);
-
-        UBLOX_V2S(UBX_ACK_ACK);
-        UBLOX_V2S(UBX_ACK_NAK);
-
-        UBLOX_V2S(UBX_RXM_RAW);
-        UBLOX_V2S(UBX_RXM_SFRB);
-        UBLOX_V2S(UBX_RXM_RAWX);
-        UBLOX_V2S(UBX_RXM_SFRBX);
-
-        UBLOX_V2S(UBX_NAV_TIMEGPS);
-        UBLOX_V2S(UBX_NAV_CLOCK);
-        UBLOX_V2S(UBX_NAV_SVINFO);
-
-        UBLOX_V2S(UBX_CFG_ANT);
-        UBLOX_V2S(UBX_CFG_BDS);
-        UBLOX_V2S(UBX_CFG_CFG);
-        UBLOX_V2S(UBX_CFG_DAT);
-        UBLOX_V2S(UBX_CFG_EKF);
-        UBLOX_V2S(UBX_CFG_ESFGWT);
-        UBLOX_V2S(UBX_CFG_FXN);
-        UBLOX_V2S(UBX_CFG_GNSS);
-        UBLOX_V2S(UBX_CFG_INF);
-        UBLOX_V2S(UBX_CFG_ITFM);
-        UBLOX_V2S(UBX_CFG_MSG);
-        UBLOX_V2S(UBX_CFG_NAV5);
-        UBLOX_V2S(UBX_CFG_NAVX5);
-        UBLOX_V2S(UBX_CFG_NMEA);
-        UBLOX_V2S(UBX_CFG_NVS);
-        UBLOX_V2S(UBX_CFG_PM);
-        UBLOX_V2S(UBX_CFG_PM2);
-        UBLOX_V2S(UBX_CFG_PRT);
-        UBLOX_V2S(UBX_CFG_RATE);
-        UBLOX_V2S(UBX_CFG_RINV);
-        UBLOX_V2S(UBX_CFG_RXM);
-        UBLOX_V2S(UBX_CFG_SBAS);
-        UBLOX_V2S(UBX_CFG_TMODE);
-        UBLOX_V2S(UBX_CFG_TMODE2);
-        UBLOX_V2S(UBX_CFG_TP);
-        UBLOX_V2S(UBX_CFG_TP5);
-        UBLOX_V2S(UBX_CFG_USB);
-
-        UBLOX_V2S(UBX_UPD_DOWNL);
-        UBLOX_V2S(UBX_UPD_EXEC);
-        UBLOX_V2S(UBX_UPD_MEMCPY);
-        UBLOX_V2S(UBX_UPD_SOS);
-        UBLOX_V2S(UBX_UPD_UPLOAD);
-
-        UBLOX_V2S(UBX_TRK_D2);
-        UBLOX_V2S(UBX_TRK_D5);
-        UBLOX_V2S(UBX_TRK_MEAS);
-        UBLOX_V2S(UBX_TRK_SFRB);
-        UBLOX_V2S(UBX_TRK_SFRBX);
-    }
-    return "UNKNOWN_UBX_ID";
-#undef UBLOX_V2S
-}
-
-const char *
-ublox_val2cstr_portid(uint16_t port_id)
-{
-    switch (port_id) {
-    case 0: return "I2C(DDC)"; // Display Data Channel (DDC)
-    case 1: return "UART1";
-    case 2: return "UART2";
-    case 3: return "USB";
-    case 4: return "SPI";
-    }
-    return "UNKNOWN_PORT_ID";
-}
-
-
-#if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
-#include <ciut.h>
-
-TEST_CASE( .name="ublox-val2cstr", .description="Test ublox val2cstr." ) {
-
-    SECTION("test ublox val2cstr") {
-        CIUT_LOG ("convert classid=0x%02X, id=0x%02X?", (UBX_MON_VER >> 8) & 0xFF, UBX_MON_VER & 0xFF);
-        REQUIRE(0 == strcmp(ublox_val2cstr_classid(UBX_MON_VER >> 8, UBX_MON_VER & 0xFF), "UBX_MON_VER"));
-        REQUIRE(0 == strcmp(ublox_val2cstr_classid(UBX_MON_HW >> 8, UBX_MON_HW & 0xFF), "UBX_MON_HW"));
-    }
-}
-#endif /* CIUT_ENABLED */
 
 
 /*****************************************************************************/
@@ -1089,11 +990,11 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     // read count
     count = UBLOX_PKG_LENGTH(buffer_in);
 
-    TD("ublox info: received %s, value: 0x%04X\n", ublox_val2cstr_classid(buffer_in[2], buffer_in[3]), classid);
+    TD("ublox info: received %s, value: 0x%04X\n", val2cstr_ublox_classid(buffer_in[2], buffer_in[3]), classid);
 
     p = buffer_in + 6;
 
-    fprintf(stdout, "ublox %s:\n", ublox_val2cstr_classid(buffer_in[2], buffer_in[3]));
+    fprintf(stdout, "ublox %s:\n", val2cstr_ublox_classid(buffer_in[2], buffer_in[3]));
     switch (classid) {
     case UBX_MON_VER:
     {
@@ -1556,10 +1457,10 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
 
         fprintf(stdout, "\tmsgID: %02X\n", *p);
         p += 1;
-        fprintf(stdout, "\t(classid) %s\n", ublox_val2cstr_classid(*(p-2),*(p-1)));
+        fprintf(stdout, "\t(classid) %s\n", val2cstr_ublox_classid(*(p-2),*(p-1)));
 
         for (i = 0; p - buffer_in - 6 < count; i ++) {
-            fprintf(stdout, "\tout[%d]: %02X (%s:%s)\n", i, *p, ublox_val2cstr_portid(i), (*p==0?"OFF":"ON"));
+            fprintf(stdout, "\tout[%d]: %02X (%s:%s)\n", i, *p, val2cstr_ublox_portid(i), (*p==0?"OFF":"ON"));
             p += 1;
         }
 
@@ -1596,7 +1497,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         // U1 portID(=0), U1 reserved0, X2 txReady, X4 mode, U4 reserved3, X2 inPortoMask, X2 outPortoMask, U2 reserved4, U2 reserved5
 
         portid = *p;
-        fprintf(stdout, "\tPortID: %s (0x%02X)\n", ublox_val2cstr_portid(*p), *p);
+        fprintf(stdout, "\tPortID: %s (0x%02X)\n", val2cstr_ublox_portid(*p), *p);
         p += 1;
 
         if (count == 1) {
@@ -2137,7 +2038,7 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         *sz_processed = sz;
         assert(*sz_processed <= sz_in);
 
-        TE("ublox error: unsupport command in packet: classid=%s(0x%04X)\n", ublox_val2cstr_classid(buffer_in[2], buffer_in[3]), classid);
+        TE("ublox error: unsupport command in packet: classid=%s(0x%04X)\n", val2cstr_ublox_classid(buffer_in[2], buffer_in[3]), classid);
         hex_dump_to_fd(STDERR_FILENO, buffer_in, sz_in);
 
         return 2;
