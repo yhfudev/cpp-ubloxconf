@@ -427,7 +427,7 @@ ssize_t
 cstrlist2array_dec_val(const char *cstr_in, size_t len_cstr, char * buffer_out, size_t sz_bufout)
 {
     int i = 0;
-    unsigned int val;
+    unsigned long int val;
     char *p = cstr_in;
     char *p_end = cstr_in + len_cstr;
     while (IS_BLANK(*p) && p < p_end) p ++;
@@ -441,7 +441,7 @@ cstrlist2array_dec_val(const char *cstr_in, size_t len_cstr, char * buffer_out, 
         if (p >= p_end) {
             break;
         }
-        if (sscanf(p, "%d", &val) <= 0) {
+        if (sscanf(p, "%lu", &val) <= 0) {
             break;
         }
         if (sz_bufout < i) {
@@ -704,12 +704,12 @@ ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, siz
             break;
         case UBX_UPD_DOWNL:
         {
-            unsigned int u4_1;
-            unsigned int u4_2;
+            unsigned long int u4_1;
+            unsigned long int u4_2;
             ssize_t len;
             char buf2[40];
 
-            if (sscanf(p, "%d %d", &u4_1, &u4_2) != 2) {
+            if (sscanf(p, "%lu %lu", &u4_1, &u4_2) != 2) {
                 // error in scan the data
                 TE( "sscanf two numbers failed\n");
                 ret = -1;
@@ -748,21 +748,20 @@ ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, siz
                 ret = -2;
                 break;
             }
-            TD("ublox_pkt_create_upd_downl(0x%08X 0x%08X) from '%s'\n", u4_1, u4_2);
+            TD("ublox_pkt_create_upd_downl(0x%08X 0x%08X) from '%s'\n", u4_1, u4_2, buf_in);
             ret = ublox_pkt_create_upd_downl (buf_out, sz_bufout, u4_1, u4_2, buf2, len);
         }
         break;
 
         case UBX_CFG_BDS:
         {
-            unsigned int u4_1;
-            unsigned int u4_2;
-            unsigned int u4_3;
-            unsigned int u4_4;
-            unsigned int u4_5;
-            unsigned int u4_6;
-
-            sscanf(p, "%d %d %d %d %d %d", &u4_1, &u4_2, &u4_3, &u4_4, &u4_5, &u4_6);
+            unsigned long int u4_1;
+            unsigned long int u4_2;
+            unsigned long int u4_3;
+            unsigned long int u4_4;
+            unsigned long int u4_5;
+            unsigned long int u4_6;
+            sscanf(p, "%lu %lu %lu %lu %lu %lu", &u4_1, &u4_2, &u4_3, &u4_4, &u4_5, &u4_6);
             TD("ublox_pkt_create_cfg_bds(0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X) from '%s'\n", u4_1, u4_2, u4_3, u4_4, u4_5, u4_6, p_end);
             ret = ublox_pkt_create_cfg_bds (buf_out, sz_bufout, u4_1, u4_2, u4_3, u4_4, u4_5, u4_6);
         }
@@ -817,13 +816,13 @@ ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, siz
                 // get conf
                 ret = ublox_pkt_create_get_cfgprt(buf_out, sz_bufout, portID);
             } else {
-                unsigned int txReady;
-                unsigned int mode;
-                unsigned int baudRate;
-                unsigned int inProtoMask;
-                unsigned int outProtoMask;
-                unsigned int reserved;
-                sscanf(p1, "%d %d %d %d %d %d", &portID, &txReady, &mode, &baudRate, &inProtoMask, &outProtoMask);
+                unsigned long int txReady;
+                unsigned long int mode;
+                unsigned long int baudRate;
+                unsigned long int inProtoMask;
+                unsigned long int outProtoMask;
+                unsigned long int reserved;
+                sscanf(p1, "%lu %lu %lu %lu %lu %lu", &portID, &txReady, &mode, &baudRate, &inProtoMask, &outProtoMask);
                 ret = ublox_pkt_create_set_cfgprt (buf_out, sz_bufout, portID, txReady, mode, baudRate, inProtoMask, outProtoMask);
             }
         }
@@ -846,10 +845,10 @@ ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, siz
                 // get conf
                 ret = ublox_pkt_create_get_cfgrate(buf_out, sz_bufout);
             } else {
-                unsigned int measRate;
-                unsigned int navRate;
-                unsigned int timeRef;
-                sscanf(p1, "%d %d %d", &measRate, &navRate, &timeRef);
+                unsigned long int measRate;
+                unsigned long int navRate;
+                unsigned long int timeRef;
+                sscanf(p1, "%lu %lu %lu", &measRate, &navRate, &timeRef);
                 ret = ublox_pkt_create_set_cfgrate (buf_out, sz_bufout, measRate, navRate, timeRef);
             }
         }
@@ -858,22 +857,22 @@ ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, siz
 
         case UBX_CFG_GNSS:
         {
-            unsigned int msgVer;
-            unsigned int numTrkChHw;
-            unsigned int numTrkChUse;
-            unsigned int numConfigBlocks;
+            unsigned long int msgVer;
+            unsigned long int numTrkChHw;
+            unsigned long int numTrkChUse;
+            unsigned long int numConfigBlocks;
 
-            unsigned int gnssId;
-            unsigned int resTrkCh;
-            unsigned int maxTrkCh;
-            unsigned int reserved1;
-            unsigned int flags;
+            unsigned long int gnssId;
+            unsigned long int resTrkCh;
+            unsigned long int maxTrkCh;
+            unsigned long int reserved1;
+            unsigned long int flags;
             char buffer2[200];
 
             int i;
             int j;
 
-            if (4 != sscanf(p, "%d %d %d %d", &msgVer, &numTrkChHw, &numTrkChUse, &numConfigBlocks)) {
+            if (4 != sscanf(p, "%lu %lu %lu %lu", &msgVer, &numTrkChHw, &numTrkChUse, &numConfigBlocks)) {
                 // error
                 TW("parse CFG-GNSS");
                 break;
@@ -888,7 +887,7 @@ ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, siz
             }
             for (i = 0; i < numConfigBlocks; i ++) {
                 assert (8 * i <= sizeof(buffer2));
-                if (5 != sscanf(p, "%d %d %d %d %d", &gnssId, &resTrkCh, &maxTrkCh, &reserved1, &flags)) {
+                if (5 != sscanf(p, "%lu %lu %lu %lu %lu", &gnssId, &resTrkCh, &maxTrkCh, &reserved1, &flags)) {
                     // error
                     TW("parse CFG-GNSS block");
                     break;

@@ -10,8 +10,9 @@
 #ifndef UBLOX_CONN_H
 #define UBLOX_CONN_H
 
+#ifndef DEBUG
 #define DEBUG 0
-
+#endif
 
 #include <stdlib.h>    /* size_t */
 #include <sys/types.h> /* ssize_t pid_t off64_t */

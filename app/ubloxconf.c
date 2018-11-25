@@ -36,10 +36,10 @@
 #define hex_dump_to_fp(a,b,c)
 #endif
 
-//#define TD(...)
-//#define TI(...)
-#define TD printf
-#define TI printf
+#define TD(...)
+#define TI(...)
+//#define TD printf
+//#define TI printf
 #define TW printf
 #define TE printf
 

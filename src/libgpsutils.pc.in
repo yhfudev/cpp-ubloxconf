@@ -8,6 +8,6 @@ URL: https://github.com/yhfudev/libgpsutils.git
 Description: Simple GPS utils
 Version: @PACKAGE_VERSION@
 Requires: 
-Libs: -L${libdir} -llibgpsutils
+Libs: -L${libdir} -lgpsutils
 Cflags: -I${includedir}
 
