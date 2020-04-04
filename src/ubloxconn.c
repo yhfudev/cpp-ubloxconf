@@ -96,7 +96,7 @@ ublox_pkt_verify (uint8_t *buffer, size_t sz_buf)
         return 0;
     }
 
-    TE("Verify error: checksum. sz_buf=%d,count=%d, expected=0x%02X%02X, got=0x%02X%02X\n", sz_buf, count, *(buffer + 6 + count), *(buffer + 6 + count + 1), chksum[0], chksum[1]);
+    TE("Verify error: checksum. sz_buf=%ld,count=%d, expected=0x%02X%02X, got=0x%02X%02X\n", sz_buf, count, *(buffer + 6 + count), *(buffer + 6 + count + 1), chksum[0], chksum[1]);
     return -1;
 }
 
@@ -567,6 +567,18 @@ ublox_pkt_create_get_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t port_id)
     return ret;
 }
 
+/**
+ * \brief fill the buffer with the 'UBX-CFG-PRT' packet
+ * \param buffer:   the buffer to be filled
+ * \param sz_buf:   the byte size of the buffer
+ * \param port_id:  the port id, 0xFF - void, 0 - I2C, 1 - UART1, 2 - UART2, 3 - USB, 4 - SPI
+ * \param txReady:  
+ * \param mode:     
+ * \param baudRate: 
+ * \param inPortoMask: 
+ * \param outPortoMask: 
+ * \return <0 on fail, >0 the size of packet
+ */
 ssize_t
 ublox_pkt_create_set_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t port_id, uint16_t txReady, uint32_t mode, uint32_t baudRate, uint16_t inPortoMask, uint16_t outPortoMask)
 {
@@ -627,6 +639,70 @@ ublox_pkt_create_set_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t port_id, ui
     return ret;
 }
 
+/**
+ * \brief fill the buffer with the 'UBX-CFG-CFG' packet
+ * \param buffer:   the buffer to be filled
+ * \param sz_buf:   the byte size of the buffer
+ * \param clear_mask: the clear mask
+ * \param save_mask: 
+ * \param load_mask: 
+ * \param device_mask: 
+ * \return <0 on fail, >0 the size of packet
+ */
+ssize_t
+ublox_pkt_create_set_cfgcfg (uint8_t *buffer, size_t sz_buf, uint32_t clear_mask, uint32_t save_mask, uint32_t load_mask, uint8_t device_mask)
+{
+    ssize_t ret = 0;
+
+    if (NULL == buffer) {
+        return -1;
+    }
+    if (sz_buf < 8 + 13) {
+        return -1;
+    }
+    assert (NULL != buffer);
+
+    // header
+    buffer[0] = 0xB5;
+    buffer[1] = 0x62;
+    // class
+    buffer[2] = 0x06;
+    // ID
+    buffer[3] = 0x09;
+
+    // length, little endian
+    buffer[4] = 12;
+    if (device_mask) {
+        buffer[4] = 13;
+    }
+    buffer[5] = 0x00;
+
+    // payload
+    ret = 6;
+    buffer[ret ++] = clear_mask & 0xFF;
+    buffer[ret ++] = (clear_mask >> 8) & 0xFF;
+    buffer[ret ++] = (clear_mask >> 16) & 0xFF;
+    buffer[ret ++] = (clear_mask >> 24) & 0xFF;
+
+    buffer[ret ++] = save_mask & 0xFF;
+    buffer[ret ++] = (save_mask >> 8) & 0xFF;
+    buffer[ret ++] = (save_mask >> 16) & 0xFF;
+    buffer[ret ++] = (save_mask >> 24) & 0xFF;
+
+    buffer[ret ++] = load_mask & 0xFF;
+    buffer[ret ++] = (load_mask >> 8) & 0xFF;
+    buffer[ret ++] = (load_mask >> 16) & 0xFF;
+    buffer[ret ++] = (load_mask >> 24) & 0xFF;
+
+    if (device_mask) {
+        buffer[ret ++] = device_mask & 0xFF;
+    }
+
+    ublox_pkt_checksum(buffer + 2, ret - 2, buffer + ret);
+    ret += 2;
+
+    return ret;
+}
 
 /**
  * \brief fill the buffer with the 'UBX-CFG-RATE' packet
