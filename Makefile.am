@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS=doc src app tests
+SUBDIRS=doc src app tests examples
 
 DISTCLEANFILES=
 

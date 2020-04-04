@@ -1,0 +1,3 @@
+[submodule "libosporting"]
+	path = lib/libosporting
+	url = https://github.com/yhfudev/cpp-osporting.git

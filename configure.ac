@@ -49,8 +49,8 @@ fi
 dnl where to install the doxygen-generated HTML doc
 AC_ARG_WITH(html-docdir,
             [AC_HELP_STRING([--with-html-docdir=DIR],
-                            [where to install the doxyten-generated HTML doc [PREFIX/share/doc/libedio24/html]])],
-            [htmldocdir="$withval"], [htmldocdir=\$\{prefix\}/share/doc/libedio24/html])
+                            [where to install the doxyten-generated HTML doc [PREFIX/share/doc/${PACKAGE_NAME}/html]])],
+            [htmldocdir="$withval"], [htmldocdir=\$\{prefix\}/share/doc/${PACKAGE_NAME}/html])
 AC_SUBST(htmldocdir)
 AM_CONDITIONAL(ENABLE_DOXYGEN_DOC,test "x$enable_doxygen_doc" = "xyes")
 
@@ -130,6 +130,33 @@ if test "x$CIUT_LIB_DIR" != "x" ; then
   LDFLAGS="-L${CIUT_LIB_DIR} ${LDFLAGS}"
   #AC_CHECK_LIB([ciut], [ciut_main], [ LIBCIUTL='yes' ], AC_MSG_ERROR([Couldn't find ciut lib file ]), [-L${CIUT_LIB_DIR} -lciut])
 fi
+
+
+# osporting
+AC_ARG_WITH(osporting,
+            [AS_HELP_STRING([--with-osporting],[Base directory to look for libosporting headers and libraries])],
+            [OSPORTING_LIB_DIR="${withval}/src"
+             OSPORTING_INC_DIR="${withval}/src"],)
+
+AC_ARG_WITH(osporting-lib,
+            [AS_HELP_STRING([--with-osporting-lib],[Directory to look for libosporting libraries])],
+            [OSPORTING_LIB_DIR="${withval}"],)
+
+AC_ARG_WITH(osporting-include,
+            [AS_HELP_STRING([--with-osporting-include],[Directory to look for libosporting headers])],
+            [OSPORTING_INC_DIR="${withval}"],)
+if test "x$OSPORTING_INC_DIR" != "x" ; then
+  CFLAGS="-I${OSPORTING_INC_DIR} ${CFLAGS}"
+  #SAVE_CXXFLAGS="$CXXFLAGS"
+  CXXFLAGS="-I${OSPORTING_INC_DIR} $CXXFLAGS"
+  AC_CHECK_HEADERS([osporting.h], [ LIBOSPORTINGH='yes' ], AC_MSG_ERROR([Couldn't find libosporting header ]), [])
+  #CXXFLAGS="$SAVE_CXXFLAGS"
+fi
+if test "x$OSPORTING_LIB_DIR" != "x" ; then
+  LDFLAGS="-L${OSPORTING_LIB_DIR} -losporting ${LDFLAGS}"
+  #AC_CHECK_LIB([osporting], [osporting_main], [ LIBOSPORTINGL='yes' ], AC_MSG_ERROR([Couldn't find libosporting lib file ]), [-L${OSPORTING_LIB_DIR} -losporting])
+fi
+
 
 AX_VALGRIND_DFLT([sgcheck], [off])
 AX_VALGRIND_CHECK
@@ -242,6 +269,8 @@ fi
 AC_CONFIG_FILES([
     Makefile
     app/Makefile
+    examples/Makefile
+    examples/ubloxtest/Makefile
     doc/Makefile
     doc/Doxyfile
     src/libgpsutils.pc

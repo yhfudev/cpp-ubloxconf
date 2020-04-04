@@ -37,11 +37,13 @@ endif
 SRC_BASE= \
     ubloxconn.c \
     ubloxcstr.c \
+    ubloxutils.c \
     $(NULL)
 
 include_HEADERS = \
     ubloxconn.h \
     ubloxcstr.h \
+    ubloxutils.h \
     $(NULL)
 
 noinst_HEADERS= \

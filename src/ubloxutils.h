@@ -1,11 +1,11 @@
 /**
- * \file    utils.h
+ * \file    ubloxutils.h
  * \brief   support functions
  * \author  Yunhui Fu <yhfudev@gmail.com>
  * \version 1.0
  */
-#ifndef _LIBUTILS_H
-#define _LIBUTILS_H 1
+#ifndef _LIB_UBLOX_UTILS_H
+#define _LIB_UBLOX_UTILS_H 1
 
 #include <stdio.h>
 #include <unistd.h> // STDERR_FILENO, usleep()
@@ -48,4 +48,4 @@ ssize_t parse_hex_buf(char * cstr, size_t cslen, uint8_t * buf, size_t szbuf);
 }
 #endif // __cplusplus
 
-#endif /* _LIBUTILS_H */
+#endif /* _LIB_UBLOX_UTILS_H */

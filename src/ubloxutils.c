@@ -1,5 +1,5 @@
 /**
- * \file    utils.c
+ * \file    ubloxutils.c
  * \brief   support functions
  * \author  Yunhui Fu <yhfudev@gmail.com>
  * \version 1.0
@@ -10,7 +10,7 @@
 #include <ctype.h> // isblank()
 #include <assert.h>
 
-#include "utils.h"
+#include "ubloxutils.h"
 
 #define DBGMSG(a,b,...)
 

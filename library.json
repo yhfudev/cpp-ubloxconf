@@ -1,0 +1,18 @@
+{
+	"name": "libubloxconf",
+	"keywords": "gps, u-blox, embedded, esp8266, esp32, arduino",
+	"description": "An U-Blox GPS config library for Arduino/ESP.",
+	"homepage": "https://github.com/yhfudev/cpp-ubloxconf.git",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/yhfudev/cpp-ubloxconf.git"
+	},
+	"version": "0.1.0",
+	"authors": {
+		"name": "Yunhui Fu",
+		"url": "https://github.com/yhfudev"
+	},
+	"frameworks": "arduino",
+	"platforms": "*"
+
+}

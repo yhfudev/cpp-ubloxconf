@@ -7,6 +7,7 @@
  * \copyright GPL/BSD
  */
 
+
 #define VER_MAJOR 0
 #define VER_MINOR 1
 #define VER_MOD   0
@@ -22,9 +23,12 @@
 
 #include <uv.h>
 
-#include "utils.h"
+#include "ubloxutils.h"
 #include "ubloxconn.h"
 #include "ubloxcstr.h"
+
+#undef DEBUG
+#define DEBUG 1
 
 #if DEBUG
 #include "hexdump.h"
@@ -36,8 +40,15 @@
 #define hex_dump_to_fp(a,b,c)
 #endif
 
-#define TD(...)
-#define TI(...)
+#define nullptr NULL
+#define TRACE(fmt, ...) {time_t now = time(nullptr); struct tm timeinfo; char buf[30]; gmtime_r(&now, &timeinfo); strcpy(buf, asctime(&timeinfo)); buf[strlen(buf)-1] = 0; fprintf (stderr, "%s [%s()] " fmt " {ln:%d, fn:" __FILE__ "}\n", buf, __func__, ##__VA_ARGS__, __LINE__); }
+
+
+#define TD TRACE
+#define TI TRACE
+
+//#define TD(...)
+//#define TI(...)
 //#define TD printf
 //#define TI printf
 #define TW printf
@@ -485,6 +496,46 @@ process_command_stdout(off_t pos, char * buf, size_t size, void *userdata)
     return 0;
 }
 
+void
+decode_bin(FILE *fp)
+{
+    uint8_t buffer1[200];
+    size_t sz_processed;
+    size_t sz_needed_in;
+    size_t sz_in;
+    ssize_t ret;
+    size_t sz_cur = 0;
+
+    sz_in = 0;
+    for(;;) {
+        ret = fread(buffer1 + sz_in, 1, sizeof(buffer1) - sz_in, fp);
+        if (ret > 0) {
+            sz_in += ret;
+            fprintf(stderr, "[ubloxconf] processed data size = %lu\n", sz_cur);
+        } else {
+            break;
+        }
+        while (sz_in > 0) {
+            sz_processed = 0;
+            sz_needed_in = 0;
+            ublox_cli_verify_tcp(buffer1, ret, &sz_processed, &sz_needed_in);
+            if (sz_processed > 0) {
+                if (sz_in > sz_processed) {
+                    sz_in -= sz_processed;
+                    sz_cur += sz_processed;
+                    memmove(buffer1, buffer1 + sz_processed, sz_in);
+                } else {
+                    sz_in = 0;
+                }
+            }
+            if (sz_needed_in > 0) {
+                break;
+            }
+        }
+    }
+    fprintf(stderr, "[ubloxconf] processed data size = %lu\n", sz_cur);
+}
+
 /*****************************************************************************/
 
 #if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
@@ -505,7 +556,8 @@ help (char *progname)
         , basename(progname));
     fprintf (stderr, "\nOptions:\n");
     fprintf (stderr, "\t-r\tRemote host and port\n");
-    fprintf (stderr, "\t-e <cmd file>\tExecute the command lines in the file\n");
+    fprintf (stderr, "\t-e <cmd file>\tExecute/encode the text command lines in the file\n");
+    fprintf (stderr, "\t-d <cmd file>\tDecode the binary packet from file or stdin\n");
     fprintf (stderr, "\t-t <timeout>\tThe seconds before quit, 0 - wait forever, default 30\n");
 
     fprintf (stderr, "\t-h\tPrint this message.\n");
@@ -531,12 +583,14 @@ main (int argc, char **argv)
     const char host[200] = "";
     int port = UBLOX_PORT_DEFAULT;
     const char * fn_execute = NULL;
+    FILE * fp_bin = stdin;
     time_t timeout = 30;
 
     int c;
     struct option longopts[]  = {
         { "remote",       1, 0, 'r' },
         { "execute",      1, 0, 'e' },
+        { "decode",       1, 0, 'd' },
         { "timeout",      1, 0, 't' },
 
         { "help",         0, 0, 'h' },
@@ -544,7 +598,7 @@ main (int argc, char **argv)
         { 0,              0, 0,  0  },
     };
 
-    while ((c = getopt_long( argc, argv, "r:e:t:vh", longopts, NULL )) != EOF) {
+    while ((c = getopt_long( argc, argv, "r:e:d:t:vh", longopts, NULL )) != EOF) {
         switch (c) {
         case 'r':
         {
@@ -558,6 +612,20 @@ main (int argc, char **argv)
             }
         }
             break;
+
+        case 'd':
+            if (strlen (optarg) > 0) {
+                if (stdin != fp_bin) {
+                    fclose(fp_bin);
+                }
+                if (0 == strcmp("-", optarg)) {
+                    fp_bin = stdin;
+                } else {
+                    fp_bin = fopen(optarg, "rb");
+                }
+            }
+            break;
+
         case 'e':
             if (strlen (optarg) > 0) {
                 fn_execute = optarg;
@@ -587,6 +655,11 @@ main (int argc, char **argv)
         if (fn_execute) {
             // parse the execute file
             read_file_lines (fn_execute, (void *)stdout, process_command_stdout);
+        } else if (fp_bin) {
+            decode_bin(fp_bin);
+        }
+        if (stdin != fp_bin) {
+            fclose(fp_bin);
         }
         return 0;
     }
