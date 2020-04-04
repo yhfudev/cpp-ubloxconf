@@ -80,9 +80,12 @@ extern "C" {
 #define UBLOX_CLASS_SEC 0x27
 #define UBLOX_CLASS_HNR 0x28
 
-#define UBX_NAV_TIMEGPS 0x0120
 #define UBX_NAV_CLOCK   0x0122
+#define UBX_NAV_SOL     0x0106
+#define UBX_NAV_STATUS  0x0103
 #define UBX_NAV_SVINFO  0x0130
+#define UBX_NAV_TIMEGPS 0x0120
+#define UBX_NAV_VELNED  0x0112
 
 #define UBX_RXM_RAW   0x0210
 #define UBX_RXM_SFRB  0x0211
@@ -155,6 +158,8 @@ extern "C" {
 #define UBX_MON_TXBUF 0x0A08
 #define UBX_MON_VER   0x0A04
 
+#define UBX_TIM_TM2   0x0D03
+
 // for use in CFG-MSG
 #define UBX_NMEA_GxGGA 0xF000
 #define UBX_NMEA_GxGLL 0xF001
@@ -168,12 +173,15 @@ extern "C" {
 #define UBX_NMEA_GxGBS 0xF009
 #define UBX_NMEA_GxDTM 0xF00A
 #define UBX_NMEA_GxGNS 0xF00D
+#define UBX_NMEA_GxTHS 0xF00E
 #define UBX_NMEA_GxVLW 0xF00F
 
-#define UBX_PUBX_00 0xF100
-#define UBX_PUBX_01 0xF101
-#define UBX_PUBX_03 0xF103
-#define UBX_PUBX_04 0xF104
+#define UBX_PUBX_POS  0xF100
+#define UBX_PUBX_01   0xF101
+#define UBX_PUBX_SV   0xF103
+#define UBX_PUBX_TIME 0xF104
+#define UBX_PUBX_POS2 0xF105
+#define UBX_PUBX_POS3 0xF106
 
 #define UBX_RTCM32_1005 0xF505
 #define UBX_RTCM32_1074 0xF54A
@@ -185,11 +193,9 @@ extern "C" {
 #define UBX_RTCM32_1230 0xF5E6
 #define UBX_RTCM32_4072 0xF5FE
 
-
 #define UBLOX_PKG_LENGTH(p) ((unsigned int)((p)[4]) | (((unsigned int)((p)[5])) << 8))
 
 #define UBLOX_CLASS_ID(class,id) (((class) << 8) | (id))
-
 
 void ublox_pkt_checksum(void *buffer, int length, char * out_buf);
 int ublox_pkt_verify (uint8_t *buffer, size_t sz_buf);
@@ -203,6 +209,7 @@ ssize_t ublox_pkt_create_set_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t cla
 ssize_t ublox_pkt_create_get_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t port_id);
 ssize_t ublox_pkt_create_set_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t port_id, uint16_t txReady, uint32_t mode, uint32_t baudRate, uint16_t inPortoMask, uint16_t outPortoMask);
 ssize_t ublox_pkt_create_set_cfg_gnss (uint8_t *buffer, size_t sz_buf, uint8_t msgVer, uint8_t numTrkChHw, uint8_t numTrkChUse, uint8_t numConfigBlocks, uint8_t *data);
+ssize_t ublox_pkt_create_set_cfgcfg (uint8_t *buffer, size_t sz_buf, uint32_t clear_mask, uint32_t save_mask, uint32_t load_mask, uint8_t device_mask);
 
 ssize_t ublox_pkt_create_get_cfgrate (uint8_t *buffer, size_t sz_buf);
 ssize_t ublox_pkt_create_set_cfgrate (uint8_t *buffer, size_t sz_buf, uint16_t measRate, uint16_t navRate, uint16_t timeRef);

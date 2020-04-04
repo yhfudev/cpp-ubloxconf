@@ -143,6 +143,18 @@ static cstr_val_t list_id_cfg[] = {
     {"TP5", 0x31},
     {"USB", 0x1B},
 };
+static cstr_val_t list_id_tim[] = {
+    {"DOSC", 0x11}, // Disciplined oscillator control
+    {"FCHG", 0x16}, // 
+    {"HOC",  0x17}, // 
+    {"SMEAS",0x13}, // 
+    {"SVIN", 0x04}, // 
+    {"TM2",  0x03}, // Time mark data
+    {"TOS",  0x12}, // 
+    {"TP",   0x01}, // 
+    {"VCOCAL", 0x15}, // 
+    {"VRFY", 0x06}, // 
+};
 static cstr_val_t list_id_trk[] = {
     {"D2",   0x06}, // antaris4
     {"D5",   0x0A}, // ublox6 ROM 7.03
@@ -181,6 +193,7 @@ static cstr_val_t list_class[] = {
     {"NAV", 0x01},
     {"RXM", 0x02},
     {"SEC", 0x27},
+    {"TIM", 0x0D},
     {"TRK", 0x03},
     {"UPD", 0x09},
 };
@@ -197,6 +210,7 @@ static record_cstr_val_t ublox_class_id[] = {
     { &list_id_nav, NUM_ARRAY(list_id_nav), },
     { NULL, 0, },
     { NULL, 0, },
+    { &list_id_tim, NUM_ARRAY(list_id_tim), },
     { &list_id_trk, NUM_ARRAY(list_id_trk), },
     { &list_id_upd, NUM_ARRAY(list_id_upd), },
 };
@@ -318,6 +332,8 @@ TEST_CASE( .name="ublox-cstr2val_ublox_classid", .description="Test cstr2val_ubl
     UBLOX_V2S(UBX_MON_TXBUF) \
     UBLOX_V2S(UBX_MON_VER) \
     \
+    UBLOX_V2S(UBX_TIM_TM2) \
+    \
     UBLOX_V2S(UBX_ACK_ACK) \
     UBLOX_V2S(UBX_ACK_NAK) \
     \
@@ -326,9 +342,12 @@ TEST_CASE( .name="ublox-cstr2val_ublox_classid", .description="Test cstr2val_ubl
     UBLOX_V2S(UBX_RXM_RAWX) \
     UBLOX_V2S(UBX_RXM_SFRBX) \
     \
+    UBLOX_V2S(UBX_NAV_STATUS) \
+    UBLOX_V2S(UBX_NAV_SOL) \
     UBLOX_V2S(UBX_NAV_TIMEGPS) \
     UBLOX_V2S(UBX_NAV_CLOCK) \
     UBLOX_V2S(UBX_NAV_SVINFO) \
+    UBLOX_V2S(UBX_NAV_VELNED) \
     \
     UBLOX_V2S(UBX_CFG_ANT) \
     UBLOX_V2S(UBX_CFG_BDS) \
@@ -368,7 +387,40 @@ TEST_CASE( .name="ublox-cstr2val_ublox_classid", .description="Test cstr2val_ubl
     UBLOX_V2S(UBX_TRK_D5) \
     UBLOX_V2S(UBX_TRK_MEAS) \
     UBLOX_V2S(UBX_TRK_SFRB) \
-    UBLOX_V2S(UBX_TRK_SFRBX)
+    UBLOX_V2S(UBX_TRK_SFRBX) \
+    \
+    UBLOX_V2S(UBX_NMEA_GxGGA) \
+    UBLOX_V2S(UBX_NMEA_GxGLL) \
+    UBLOX_V2S(UBX_NMEA_GxGSA) \
+    UBLOX_V2S(UBX_NMEA_GxGSV) \
+    UBLOX_V2S(UBX_NMEA_GxRMC) \
+    UBLOX_V2S(UBX_NMEA_GxVTG) \
+    UBLOX_V2S(UBX_NMEA_GxGRS) \
+    UBLOX_V2S(UBX_NMEA_GxGST) \
+    UBLOX_V2S(UBX_NMEA_GxZDA) \
+    UBLOX_V2S(UBX_NMEA_GxGBS) \
+    UBLOX_V2S(UBX_NMEA_GxDTM) \
+    UBLOX_V2S(UBX_NMEA_GxGNS) \
+    UBLOX_V2S(UBX_NMEA_GxTHS) \
+    UBLOX_V2S(UBX_NMEA_GxVLW) \
+    \
+    UBLOX_V2S(UBX_PUBX_POS) \
+    UBLOX_V2S(UBX_PUBX_01) \
+    UBLOX_V2S(UBX_PUBX_SV) \
+    UBLOX_V2S(UBX_PUBX_TIME) \
+    UBLOX_V2S(UBX_PUBX_POS2) \
+    UBLOX_V2S(UBX_PUBX_POS3) \
+    \
+    UBLOX_V2S(UBX_RTCM32_1005) \
+    UBLOX_V2S(UBX_RTCM32_1074) \
+    UBLOX_V2S(UBX_RTCM32_1077) \
+    UBLOX_V2S(UBX_RTCM32_1084) \
+    UBLOX_V2S(UBX_RTCM32_1087) \
+    UBLOX_V2S(UBX_RTCM32_1124) \
+    UBLOX_V2S(UBX_RTCM32_1127) \
+    UBLOX_V2S(UBX_RTCM32_1230) \
+    UBLOX_V2S(UBX_RTCM32_4072) \
+
 
 const char *
 val2cstr_ublox_classid(uint16_t class, uint16_t id)
