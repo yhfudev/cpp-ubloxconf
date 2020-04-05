@@ -7,11 +7,12 @@
  * \copyright GPL/BSD
  */
 
-#include <stdio.h>
-#include <assert.h>
-
 #include "ubloxconn.h"
 #include "ubloxcstr.h"
+
+#ifndef DEBUG
+#define DEBUG 0
+#endif
 
 #if DEBUG
 #include "hexdump.h"
@@ -22,13 +23,6 @@
 #ifndef hex_dump_to_fp
 #define hex_dump_to_fp(a,b,c)
 #endif
-
-//#define TD(...)
-//#define TI(...)
-#define TD printf
-#define TI printf
-#define TW printf
-#define TE printf
 
 #if !defined(DEBUG) || (DEBUG == 0)
 #undef TD
@@ -342,6 +336,7 @@ TEST_CASE( .name="ublox-cstr2val_ublox_classid", .description="Test cstr2val_ubl
     UBLOX_V2S(UBX_RXM_RAWX) \
     UBLOX_V2S(UBX_RXM_SFRBX) \
     \
+    UBLOX_V2S(UBX_NAV_PVT) \
     UBLOX_V2S(UBX_NAV_STATUS) \
     UBLOX_V2S(UBX_NAV_SOL) \
     UBLOX_V2S(UBX_NAV_TIMEGPS) \
@@ -423,10 +418,10 @@ TEST_CASE( .name="ublox-cstr2val_ublox_classid", .description="Test cstr2val_ubl
 
 
 const char *
-val2cstr_ublox_classid(uint16_t class, uint16_t id)
+val2cstr_ublox_classid(uint16_t class_v, uint16_t id)
 {
 #define UBLOX_V2S(a) case a: return #a;
-    switch (UBLOX_CLASS_ID(class,id)) {
+    switch (UBLOX_CLASS_ID(class_v,id)) {
             LIST_CLASSID
     }
     return "UNKNOWN_UBX_ID";
@@ -748,12 +743,14 @@ ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, siz
         case UBX_MON_VER:
             ret = ublox_pkt_create_get_version (buf_out, sz_bufout);
             break;
+#if 1
         case UBX_MON_HW:
             ret = ublox_pkt_create_get_hw (buf_out, sz_bufout);
             break;
         case UBX_MON_HW2:
             ret = ublox_pkt_create_get_hw2 (buf_out, sz_bufout);
             break;
+#endif // 0
         case UBX_UPD_DOWNL:
         {
             unsigned long int u4_1;
@@ -836,9 +833,12 @@ ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, siz
             }
             if (i < 2) {
                 // error
+                TE("CFG-MSG arg number less than 2");
                 break;
             }
+            //TI("# of rate = %d", i-2);
             ret = ublox_pkt_create_set_cfgmsg (buf_out, sz_bufout, buf1[0], buf1[1], buf1 + 2, i - 2);
+            //TD("ret=%d", ret);
         }
         break;
 
@@ -905,7 +905,6 @@ ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, siz
             }
         }
         break;
-//ssize_t ublox_pkt_create_set_cfg_gnss (uint8_t *buffer, size_t sz_buf, uint8_t msgVer, uint8_t numTrkChHw, uint8_t numTrkChUse, uint8_t numConfigBlocks, uint8_t *data);
 
         case UBX_CFG_GNSS:
         {
@@ -965,7 +964,21 @@ ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, siz
         }
         break;
 
+        case UBX_CFG_CFG:
+        {
+            unsigned long int u4_1;
+            unsigned long int u4_2;
+            unsigned long int u4_3;
+            unsigned long int u4_4;
+            TD("UBX_CFG_CFG");
+            sscanf(p, "%lu %lu %lu %lu %lu %lu", &u4_1, &u4_2, &u4_3, &u4_4);
+            TD("ublox_pkt_create_cfg_bds(0x%08X 0x%08X 0x%08X 0x%02X) from '%s'\n", u4_1, u4_2, u4_3, u4_4, p_end);
+            ret = ublox_pkt_create_set_cfgcfg (buf_out, sz_bufout, u4_1, u4_2, u4_3, u4_4);
+        }
+        break;
+
         default:
+            TE("Not support class,id=%d,%d", class,id);
             ret = -1;
             break;
     }
@@ -1051,21 +1064,40 @@ TEST_CASE( .name="ublox-ublox_confline2bin_rtklibarg", .description="Test ublox_
             "\t   CFG-GNSS -  06 3E 04 00 00 00 00 00   \r\n",
             "b5 62 06 3E 04 00 00 00 00 00 48 FA",
         },
+        {
+            "!UBX \t CFG-GNSS   0 0 22 4   0 4 255 0 16777217  1 1 3 0 16777216  5 0 3 0 16777216  6 8 255 0 16777216  \r\n",
+            "\t CFG-GNSS  -   06 3E 24 00 00 00 16 04 00 04 FF 00 01 00 00 01 01 01 03 00 00 00 00 01 05 00 03 00 00 00 00 01 06 08 FF 00 00 00 00 01  \r\n",
+            "B5 62 06 3E 24 00 00 00 16 04 00 04 FF 00 01 00 00 01 01 01 03 00 00 00 00 01 05 00 03 00 00 00 00 01 06 08 FF 00 00 00 00 01 A4 25",
+        },
+        { // NAV-PVT
+            "!UBX CFG-MSG 1 7 1",
+            " CFG-MSG - 06 01 03 00 01 07 01",
+            "B5 62 06 01 03 00 01 07 01 13 51",
+        },
+        {
+            "!UBX CFG-CFG 65535 0 65535 23 \t   ",
+            "CFG-CFG   -  \t 06 09 0D 00 FF FF 00 00 00 00 00 00 FF FF 00 00 17  \t ",
+            "B5 62 06 09 0D 00 FF FF 00 00 00 00 00 00 FF FF 00 00 17 2F AE",
+        },
     };
     SECTION("test ublox_confline2bin") {
+        int ret;
         for (i = 0; i < NUM_ARRAY(list_test_cases); i ++) {
+            CIUT_LOG("+++++++++++++++++ [%d]\n", i);
             REQUIRE(sizeof(buffer1) >= (strlen(list_test_cases[i][2]) + 2)/3);
-            REQUIRE((strlen(list_test_cases[i][2]) + 2)/3 == ublox_confline2bin_rtklibarg(list_test_cases[i][0], strlen(list_test_cases[i][0]), buffer1, sizeof(buffer1)));
-            REQUIRE((strlen(list_test_cases[i][2]) + 2)/3 == cstrlist2array_hex_val(list_test_cases[i][2], strlen(list_test_cases[i][2]), buffer2, sizeof(buffer2)));
-            CIUT_LOG("---------------- [%d]\n", i);
+            ret = ublox_confline2bin_rtklibarg(list_test_cases[i][0], strlen(list_test_cases[i][0]), buffer1, sizeof(buffer1));
             CIUT_LOG("buffer1:", 0);
             hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer1), (strlen(list_test_cases[i][2]) + 2)/3);
+            REQUIRE((strlen(list_test_cases[i][2]) + 2)/3 == ret);
+            ret = cstrlist2array_hex_val(list_test_cases[i][2], strlen(list_test_cases[i][2]), buffer2, sizeof(buffer2));
             CIUT_LOG("buffer2:", 0);
             hex_dump_to_fd(STDERR_FILENO, (opaque_t *)(buffer2), (strlen(list_test_cases[i][2]) + 2)/3);
+            REQUIRE((strlen(list_test_cases[i][2]) + 2)/3 == ret);
             CIUT_LOG("----------------", 0);
             REQUIRE(0 == memcmp(buffer1, buffer2, (strlen(list_test_cases[i][2]) + 2)/3));
             REQUIRE((strlen(list_test_cases[i][2]) + 2)/3 == ublox_confline2bin_hex(list_test_cases[i][1], strlen(list_test_cases[i][1]), buffer1, sizeof(buffer1)));
             REQUIRE(0 == memcmp(buffer1, buffer2, (strlen(list_test_cases[i][2]) + 2)/3));
+            CIUT_LOG("----------------", 0);
         }
     }
 }

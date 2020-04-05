@@ -7,12 +7,7 @@
 #ifndef _LIB_UBLOX_UTILS_H
 #define _LIB_UBLOX_UTILS_H 1
 
-#include <stdio.h>
-#include <unistd.h> // STDERR_FILENO, usleep()
-
-#include <stdlib.h>    /* size_t */
-#include <sys/types.h> /* ssize_t pid_t */
-#include <stdint.h> // uint8_t
+#include "osporting.h"
 
 #ifdef __cplusplus
 extern "C" {

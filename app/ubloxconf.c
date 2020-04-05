@@ -121,85 +121,45 @@ alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
  *
  * process the data in the buffer, until there's no more data can be processed in one round
  */
-ssize_t
+int
 ubxcli_process_data (ubloxdata_client_t * ped, uv_stream_t *stream)
 {
-    uint8_t * buffer_in = NULL;
-    size_t sz_in;
-    size_t sz_processed;
-    size_t sz_needed_in;
-
     //int flg_again = 0;
     int ret;
+    size_t sz_processed;
+    size_t sz_needed_in;
 
     assert (NULL != ped);
     assert (NULL != stream);
 
     TD("tcp cli ubxcli_process_data() BEGIN\n");
     while(1) { // while (ped->sz_data > 0) {
-        buffer_in = ped->buffer;
-        sz_in = ped->sz_data;
         //flg_again = 0;
-        sz_processed = 0;
-        sz_needed_in = 0;
-
         TD("tcp cli ubxcli_process_data() ped->sz_data=%" PRIuSZ "\n", ped->sz_data);
-        assert (NULL != buffer_in);
-        assert (sz_in >= 0);
+        assert (NULL != ped->buffer);
+        assert (ped->sz_data >= 0);
         TD("tcp cli ubxcli_process_data() call ublox_pkt_nexthdr_ubx\n");
 
-        ret = ublox_pkt_nexthdr_ubx(buffer_in, sz_in, &sz_processed, &sz_needed_in);
+        ret = ublox_process_buffer_data(ped->buffer, ped->sz_data, &sz_processed, &sz_needed_in);
         if (sz_processed > 0) {
-            // remove the head of data of size sz_processed
-            size_t sz_rest;
-            assert (sz_processed <= ped->sz_data);
-            sz_rest = ped->sz_data - sz_processed;
-            if (sz_rest > 0) {
-                memmove (ped->buffer, &(ped->buffer[sz_processed]), sz_rest);
+            if (ped->sz_data > sz_processed) {
+                memmove(ped->buffer, ped->buffer + sz_processed, ped->sz_data - sz_processed);
+                ped->sz_data -= sz_processed;
+            } else {
+                ped->sz_data = 0;
             }
-            ped->sz_data = sz_rest;
         }
         if (sz_needed_in > 0) {
-            TI( "need more data: %" PRIuSZ "\n", sz_needed_in);
             break;
         }
         if (ret < 0) {
             break;
         } else if (ret == 0) {
             //flg_again = 1;
-
-            ret = ublox_cli_verify_tcp(buffer_in, sz_in, &sz_processed, &sz_needed_in);
-
-            if (sz_processed > 0) {
-                // remove the head of data of size sz_processed
-                size_t sz_rest;
-                //assert (sz_processed <= ped->sz_data);
-                if (sz_processed > ped->sz_data) {
-                    sz_processed = ped->sz_data;
-                }
-                sz_rest = ped->sz_data - sz_processed;
-                if (sz_rest > 0) {
-                    memmove (ped->buffer, &(ped->buffer[sz_processed]), sz_rest);
-                }
-                ped->sz_data = sz_rest;
-            }
-            if (sz_needed_in > 0) {
-                TI( "need more data: %" PRIuSZ "\n", sz_needed_in);
-                break;
-            }
-            if (ret < 0) {
-                break;
-            } else if (ret == 0) {
-                //flg_again = 1;
-                if (g_ubxcli.timeout > 0) g_ubxcli.num_responds ++;
-            } else if (ret == 1) {
-                //flg_again = 1;
-            } else if (ret == 2) {
-                break;
-            }
-
+            if (g_ubxcli.timeout > 0) g_ubxcli.num_responds ++;
         } else if (ret == 1) {
             //flg_again = 1;
+            break;
 
         } else if (ret == 2) {
             break;

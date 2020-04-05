@@ -8,7 +8,7 @@
  */
 
 #ifndef UBLOX_CSTR_H
-#define UBLOX_CSTR_H
+#define UBLOX_CSTR_H 1
 
 
 #ifdef __cplusplus
@@ -19,7 +19,7 @@ extern "C" {
 #define NUM_ARRAY(a) (sizeof(a)/sizeof(a[0]))
 #endif
 
-const char * val2cstr_ublox_classid(uint16_t class, uint16_t id);
+const char * val2cstr_ublox_classid(uint16_t class_v, uint16_t id);
 const char * val2cstr_ublox_portid(uint16_t port_id);
 int cstr2val_ublox_classid(char * buf, size_t size, uint8_t * p_class, uint8_t *p_id);
 

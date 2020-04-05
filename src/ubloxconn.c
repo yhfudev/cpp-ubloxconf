@@ -7,11 +7,12 @@
  * \copyright GPL/BSD
  */
 
-#include <stdio.h>
-#include <assert.h>
-
 #include "ubloxconn.h"
 #include "ubloxcstr.h"
+
+#ifndef DEBUG
+#define DEBUG 0
+#endif
 
 #if DEBUG
 #include "hexdump.h"
@@ -23,18 +24,13 @@
 #define hex_dump_to_fp(a,b,c)
 #endif
 
-#define TD(...)
-#define TI(...)
-#define TW printf
-#define TE printf
-
 #if !defined(DEBUG) || (DEBUG == 0)
+#if 0
 #undef TD
 #define TD(...)
 #undef TI
 #define TI(...)
 
-#if 0
 #undef TW
 #define TW(...)
 #undef TE
@@ -53,7 +49,7 @@
  * \return the checksum value
  */
 void
-ublox_pkt_checksum(void *buffer, int length, char * out_buf)
+ublox_pkt_checksum(void *buffer, int length, uint8_t * out_buf)
 {
     char *chk_a = out_buf;
     char *chk_b = out_buf + 1;
@@ -85,9 +81,11 @@ ublox_pkt_verify (uint8_t *buffer, size_t sz_buf)
         return -1;
     }
     if (0xB5 != buffer[0]) {
+        TE("magic header");
         return -1;
     }
     if (0x62 != buffer[1]) {
+        TE("magic header");
         return -1;
     }
     count = UBLOX_PKG_LENGTH(buffer);
@@ -96,7 +94,7 @@ ublox_pkt_verify (uint8_t *buffer, size_t sz_buf)
         return 0;
     }
 
-    TE("Verify error: checksum. sz_buf=%ld,count=%d, expected=0x%02X%02X, got=0x%02X%02X\n", sz_buf, count, *(buffer + 6 + count), *(buffer + 6 + count + 1), chksum[0], chksum[1]);
+    TE("Verify error: checksum. sz_buf=" PRIuSZ ",count=%d, expected=0x%02X%02X, got=0x%02X%02X\n", sz_buf, count, *(buffer + 6 + count), *(buffer + 6 + count + 1), chksum[0], chksum[1]);
     return -1;
 }
 
@@ -192,9 +190,11 @@ ublox_pkt_create_get_version (uint8_t *buffer, size_t sz_buf)
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8) {
+        TE("no enough buffer size");
         return -1;
     }
     ret = 8;
@@ -229,9 +229,11 @@ ublox_pkt_create_get_hw (uint8_t *buffer, size_t sz_buf)
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8) {
+        TE("no enough buffer size");
         return -1;
     }
     ret = 8;
@@ -266,9 +268,11 @@ ublox_pkt_create_get_hw2 (uint8_t *buffer, size_t sz_buf)
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8) {
+        TE("no enough buffer size");
         return -1;
     }
     ret = 8;
@@ -321,12 +325,15 @@ ublox_pkt_create_upd_downl (uint8_t *buffer, size_t sz_buf, uint32_t startAddr, 
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8) {
+        TE("no enough buffer size");
         return -1;
     }
     if (sz_buf < 8 + 8 + len) {
+        TE("no enough buffer size");
         return -2;
     }
     ret = 8;
@@ -379,9 +386,11 @@ ublox_pkt_create_cfg_bds (uint8_t *buffer, size_t sz_buf, uint32_t u4_1, uint32_
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8) {
+        TE("no enough buffer size");
         return -1;
     }
     ret = 8;
@@ -450,7 +459,8 @@ TEST_CASE( .name="ublox-bds", .description="Test ublox ublox_pkt_create_cfg_bds 
         //!HEX B5 62 06 4A 18 00 00 00 00 00 00 00 00 00 1F 00 00 00 FF FF FF FF 00 00 00 00 00 00 00 00 83 AC
         REQUIRE(24 + 8 == ublox_pkt_create_cfg_bds(buffer, sizeof(buffer), 0, 0, 31, 4294967295, 0, 0));
         CIUT_LOG("%d RAW buffer:", 0);
-        hex_dump_to_fd(STDERR_FILENO, buffer, 24 + 8);
+        //hex_dump_to_fd(STDERR_FILENO, buffer, 24 + 8);
+        hex_dump_to_fp(stderr, buffer, 24 + 8);
         REQUIRE(24 == UBLOX_PKG_LENGTH(buffer));
         REQUIRE(ublox_pkt_verify(buffer, UBLOX_PKG_LENGTH(buffer)+8) == 0);
         REQUIRE(*(buffer + UBLOX_PKG_LENGTH(buffer)+8-2) == 0x83);
@@ -467,23 +477,26 @@ TEST_CASE( .name="ublox-bds", .description="Test ublox ublox_pkt_create_cfg_bds 
  * \return <0 on fail, >0 the size of packet
  */
 ssize_t
-ublox_pkt_create_set_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint8_t id, uint8_t *rates, int num_rates)
+ublox_pkt_create_set_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class_v, uint8_t id, uint8_t *rates, int num_rates)
 {
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8) {
+        TE("no enough buffer size");
         return -1;
     }
     if ((num_rates != 1) && (num_rates != 6)) {
+        TE("rate or num rate error.");
         return -1;
     }
     ret = 8;
     assert (NULL != buffer);
 
-    TD("ublox_pkt_create_set_cfgmsg(class=%d, id=%d, reats[]=%d,%d,%d,%d,%d,%d\n", class, id, rates[0], rates[1], rates[2], rates[3], rates[4], rates[5]);
+    TD("ublox_pkt_create_set_cfgmsg(class=%d, id=%d, reats[]=%d,%d,%d,%d,%d,%d\n", class_v, id, rates[0], rates[1], rates[2], rates[3], rates[4], rates[5]);
 
     // header
     buffer[0] = 0xB5;
@@ -502,7 +515,7 @@ ublox_pkt_create_set_cfgmsg (uint8_t *buffer, size_t sz_buf, uint8_t class, uint
 
     // payload
     ret = 6;
-    buffer[ret ++] = class;
+    buffer[ret ++] = class_v;
     buffer[ret ++] = id;
     if (num_rates > 0) {
         memmove(buffer + ret, rates, num_rates);
@@ -529,9 +542,11 @@ ublox_pkt_create_get_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t port_id)
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8) {
+        TE("no enough buffer size");
         return -1;
     }
     assert (NULL != buffer);
@@ -585,9 +600,11 @@ ublox_pkt_create_set_cfgprt (uint8_t *buffer, size_t sz_buf, uint8_t port_id, ui
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8 + 20) {
+        TE("no enough buffer size");
         return -1;
     }
     assert (NULL != buffer);
@@ -655,9 +672,11 @@ ublox_pkt_create_set_cfgcfg (uint8_t *buffer, size_t sz_buf, uint32_t clear_mask
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8 + 13) {
+        TE("no enough buffer size");
         return -1;
     }
     assert (NULL != buffer);
@@ -716,9 +735,11 @@ ublox_pkt_create_get_cfgrate (uint8_t *buffer, size_t sz_buf)
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8) {
+        TE("no enough buffer size");
         return -1;
     }
     assert (NULL != buffer);
@@ -748,9 +769,11 @@ ublox_pkt_create_set_cfgrate (uint8_t *buffer, size_t sz_buf, uint16_t measRate,
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8 + 20) {
+        TE("no enough buffer size");
         return -1;
     }
     assert (NULL != buffer);
@@ -792,9 +815,11 @@ ublox_pkt_create_set_cfg_gnss (uint8_t *buffer, size_t sz_buf, uint8_t msgVer, u
     ssize_t ret = 0;
 
     if (NULL == buffer) {
+        TE("buffer nullptr");
         return -1;
     }
     if (sz_buf < 8 + 20) {
+        TE("no enough buffer size");
         return -1;
     }
     assert (NULL != buffer);
@@ -842,7 +867,8 @@ TEST_CASE( .name="ublox-ext", .description="Test ublox ublox_pkt_create_get_vers
         char hex_1[] = {0x97, 0x69, 0x21, 0x00, 0x00, 0x00, 0x02, 0x10};
         REQUIRE(24 == ublox_pkt_create_upd_downl(buffer, sizeof(buffer), 0x000016C8, 0x00000000, hex_1, sizeof(hex_1)));
         CIUT_LOG("%d RAW buffer:", 0);
-        hex_dump_to_fd(STDERR_FILENO, buffer, 24);
+        //hex_dump_to_fd(STDERR_FILENO, buffer, 24);
+        hex_dump_to_fp(stderr, buffer, 24);
         REQUIRE(16 == UBLOX_PKG_LENGTH(buffer));
         REQUIRE(ublox_pkt_verify(buffer, 24) == 0);
         REQUIRE(*(buffer + 24-2) == 0x2B);
@@ -852,7 +878,8 @@ TEST_CASE( .name="ublox-ext", .description="Test ublox ublox_pkt_create_get_vers
         char hex_2[] = {0x83, 0x69, 0x21, 0x00, 0x00, 0x00, 0x02, 0x11};
         REQUIRE(24 == ublox_pkt_create_upd_downl(buffer, sizeof(buffer), 0x0000190C, 0x00000000, hex_2, sizeof(hex_2)));
         CIUT_LOG("%d SFRB buffer:", 0);
-        hex_dump_to_fd(STDERR_FILENO, buffer, 24);
+        //hex_dump_to_fd(STDERR_FILENO, buffer, 24);
+        hex_dump_to_fp(stderr, buffer, 24);
         REQUIRE(16 == UBLOX_PKG_LENGTH(buffer));
         REQUIRE(ublox_pkt_verify(buffer, 24) == 0);
         REQUIRE(*(buffer + 24-2) == 0x5F);
@@ -915,6 +942,11 @@ ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, 
     uint8_t *p;
     uint8_t *p_end;
 
+    assert (sz_processed != nullptr);
+    assert (sz_needed_in != nullptr);
+    *sz_processed = 0;
+    *sz_needed_in = 0;
+
     p = buffer_in;
     p_end = buffer_in + sz_in;
     for (; p < p_end;) {
@@ -940,8 +972,11 @@ ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, 
         }
         *sz_processed = p - buffer_in;
         *sz_needed_in = 0;
+        if (*sz_processed > sz_in) {
+            *sz_processed = sz_in;
+        }
         assert(*sz_processed <= sz_in);
-       return 0;
+        return 0;
     }
     assert(*sz_processed <= sz_in);
     return -1;
@@ -962,8 +997,8 @@ ublox_pkt_expected_size(uint8_t * buffer_in, size_t sz_in)
     size_t sz = 8+UBLOX_PKG_LENGTH(buffer_in);
     switch (UBLOX_CLASS_ID(buffer_in[2], buffer_in[3])) {
     case UBX_MON_VER: break;
-    case UBX_MON_HW:  sz=8+68; break;
-    case UBX_MON_HW2: sz=8+28; break;
+    case UBX_MON_HW:  if (UBLOX_PKG_LENGTH(buffer_in)) sz=8+68; break;
+    case UBX_MON_HW2: if (UBLOX_PKG_LENGTH(buffer_in)) sz=8+28; break;
     case UBX_MON_RXR: sz=8+1; break;
     case UBX_ACK_ACK: sz=8+2; break;
     case UBX_ACK_NAK: sz=8+2; break;
@@ -1014,6 +1049,9 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     uint8_t status;
     uint16_t count;
 
+    assert (sz_processed != nullptr);
+    assert (sz_needed_in != nullptr);
+
     if (sz_processed) {
         *sz_processed = 0;
     }
@@ -1050,7 +1088,8 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
 
     if (0 != ublox_pkt_verify(buffer_in, sz_in)) {
         TE("ublox error: packet verify.\n");
-        hex_dump_to_fd(STDERR_FILENO, buffer_in, sz_in);
+        //hex_dump_to_fd(STDERR_FILENO, buffer_in, sz_in);
+        hex_dump_to_fp(stderr, buffer_in, sz_in);
 
         // try to skip the data
         *sz_processed = ublox_pkt_expected_size(buffer_in, sz_in);
@@ -1189,7 +1228,8 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         p += 4;
 
         fprintf(stdout, "\tVP: sz=%d\n", 25);
-        hex_dump_to_fd(STDERR_FILENO, p, 25);
+        //hex_dump_to_fd(STDERR_FILENO, p, 25);
+        hex_dump_to_fp(stderr, p, 25);
         p += 25;
 
         fprintf(stdout, "\tjamInd: %02X\n", *p);
@@ -1243,7 +1283,8 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         p += 1;
 
         fprintf(stdout, "\treserved0: sz=%d\n", 3);
-        hex_dump_to_fd(STDERR_FILENO, p, 3);
+        //hex_dump_to_fd(STDERR_FILENO, p, 3);
+        hex_dump_to_fp(stderr, p, 3);
         p += 3;
 
         val32 = U32_LE(p);
@@ -1251,7 +1292,8 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         p += 4;
 
         fprintf(stdout, "\treserved1: sz=%d\n", 8);
-        hex_dump_to_fd(STDERR_FILENO, p, 8);
+        //hex_dump_to_fd(STDERR_FILENO, p, 8);
+        hex_dump_to_fp(stderr, p, 8);
         p += 8;
 
         val32 = U32_LE(p);
@@ -1656,6 +1698,31 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         fprintf(stdout, "\ttimeRef: %d(0x%04X)\n", val16, val16);
         p += 2;
 
+    }
+        break;
+
+    case UBX_CFG_CFG:
+    {
+        uint16_t val32;
+        assert((count == 12) || (count == 13));
+
+        //fprintf(stdout, "ublox !UBX CFG-RATE:\n");
+
+        val32 = U32_LE(p);
+        fprintf(stdout, "\tclearMask: %d(0x%08X)\n", val32, val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        fprintf(stdout, "\tsaveMask: %d(0x%08X)\n", val32, val32);
+        p += 4;
+
+        val32 = U32_LE(p);
+        fprintf(stdout, "\tloadMask: %d(0x%08X)\n", val32, val32);
+        p += 4;
+
+        if (count >= 13) {
+            fprintf(stdout, "\tdeviceMask: %d(0x%08X)\n", (int)*p, (int)*p);
+        }
     }
         break;
 
@@ -2115,7 +2182,8 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
         assert(*sz_processed <= sz_in);
 
         TE("ublox error: unsupport command in packet: classid=%s(0x%04X)\n", val2cstr_ublox_classid(buffer_in[2], buffer_in[3]), classid);
-        hex_dump_to_fd(STDERR_FILENO, buffer_in, sz_in);
+        //hex_dump_to_fd(STDERR_FILENO, buffer_in, sz_in);
+        hex_dump_to_fp(stderr, buffer_in, sz_in);
 
         return 2;
         break;
@@ -2129,16 +2197,278 @@ ublox_cli_verify_tcp(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, s
     return 0;
 }
 
+/**
+ * \brief read and verify the return packet from ublox module(TCP server)
+ * \param buffer_in: the buffer contains received packets
+ * \param sz_in: the byte size of the received packets
+ * \param psz_processed: the bytes size processed in the buffer_in
+ * \param psz_needed_in: the bytes size of data need to append to buffer_in
+ *
+ * \return <0 fatal error, user should kill this connection;
+ *         =2 the packet illegal, the caller should check if sz_out > 0 and send back the response in buffer_out
+ *         =1 need more data, the byte size need data is stored in sz_needed;
+ *         =0 on successs, the variable sz_processed return processed data byte size
+ */
+int
+ublox_process_buffer_data(uint8_t * buffer_in, size_t sz_in, size_t * psz_processed, size_t * psz_needed_in)
+{
+    uint8_t * p = buffer_in;
+    size_t sz_processed = 0;
+    size_t sz_needed_in = 0;
+    //int flg_again = 0;
+    int ret;
+
+    //flg_again = 0;
+    assert (psz_processed != nullptr);
+    assert (psz_needed_in != nullptr);
+    *psz_processed = 0;
+    *psz_needed_in = 0;
+    if (sz_in < 8) {
+        //TE("Need more data, cur sz=%" PRIuSZ, sz_in);
+        *psz_needed_in = 8;
+        return 1;
+    }
+
+    assert (NULL != buffer_in);
+    assert (sz_in >= 0);
+    sz_processed = 0;
+    sz_needed_in = 0;
+    ret = ublox_pkt_nexthdr_ubx(p, sz_in, &sz_processed, &sz_needed_in);
+    TD("ublox_pkt_nexthdr_ubx() ret=%d", ret);
+    if (sz_processed > 0) {
+        // remove the head of data of size sz_processed
+        size_t sz_rest;
+        assert (sz_processed <= sz_in);
+        *psz_processed += sz_processed;
+        sz_rest = sz_in - sz_processed;
+        if (sz_rest > 0) {
+            p += sz_rest;
+        }
+        sz_in = sz_rest;
+    }
+    if (sz_needed_in > 0) {
+        //TI( "need more data: %" PRIuSZ, sz_needed_in);
+        *psz_needed_in += sz_needed_in;
+        return -1;
+    }
+    if (ret < 0) {
+        return ret;
+    } else if (ret == 0) {
+        //flg_again = 1;
+
+        sz_processed = 0;
+        sz_needed_in = 0;
+        ret = ublox_cli_verify_tcp(p, sz_in, &sz_processed, &sz_needed_in);
+        TD("ublox_cli_verify_tcp() ret=%d", ret);
+        if (sz_processed > 0) {
+            // remove the head of data of size sz_processed
+            size_t sz_rest;
+            //assert (sz_processed <= sz_in);
+            if (sz_processed > sz_in) {
+                sz_processed = sz_in;
+            }
+            *psz_processed += sz_processed;
+            sz_rest = sz_in - sz_processed;
+            if (sz_rest > 0) {
+                p += sz_rest;
+            }
+            sz_in = sz_rest;
+        }
+        if (sz_needed_in > 0) {
+            TI( "need more data: %" PRIuSZ, sz_needed_in);
+            *psz_needed_in += sz_needed_in;
+            ret = 1;
+        }
+    }
+
+    return ret;
+}
 
 #if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
 #include <ciut.h>
 
-TEST_CASE( .name="test ublox inner function", .description="Test ublox inner functions." ) {
+TEST_CASE( .name="test ublox_process_buffer_data", .description="Test ublox inner functions." ) {
+    uint8_t buffer1[100];
+    ssize_t sz_buf;
+    size_t sz_processed = 0;
+    size_t sz_needed_in = 0;
+    int ret;
+    int i;
 
     SECTION("test ublox") {
-        REQUIRE(0 == 0);
-        CIUT_LOG ("ublox? %d", 0);
+        static char * data_parser[] = {
+            "B5 62 06 01 03 00 01 07 01 13 51",
+            "B5 62 06 09 0D 00 FF FF 00 00 00 00 00 00 FF FF 00 00 17 2F AE",
+        };
+
+        for (i = 0; i < NUM_ARRAY(data_parser); i ++) {
+            REQUIRE(sizeof(buffer1) >= (strlen(data_parser[i]) + 2)/3);
+            sz_buf = cstrlist2array_hex_val(data_parser[i], strlen(data_parser[i]), buffer1, sizeof(buffer1));
+            CIUT_LOG ("cstrlist2array_hex_val() return %d", sz_buf);
+            REQUIRE(sz_buf == (strlen(data_parser[i]) + 2)/3);
+            ret = ublox_process_buffer_data(buffer1, sz_buf, &sz_processed, &sz_needed_in);
+            CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+            REQUIRE(ret == 0);
+            REQUIRE(sz_processed == sz_buf);
+            REQUIRE(sz_needed_in == 0);
+        }
     }
+}
+
+TEST_CASE( .name="test ublox_process_buffer_data 2", .description="Test ublox inner functions." ) {
+    uint8_t buffer[100];
+    ssize_t sz_buf;
+    size_t sz_processed = 0;
+    size_t sz_needed_in = 0;
+    int ret;
+    int i;
+
+    SECTION("test ublox_pkt_create_set_cfgmsg") {
+
+#define ITEM(a) {UBLOX_2CLASS(a), UBLOX_2ID(a)}
+        static uint8_t class_id_nmea[][2] = {
+            ITEM(UBX_NMEA_GxGGA),
+            ITEM(UBX_NMEA_GxGLL),
+            ITEM(UBX_NMEA_GxGSA),
+            ITEM(UBX_NMEA_GxGSV),
+            ITEM(UBX_NMEA_GxRMC),
+            ITEM(UBX_NMEA_GxVTG),
+            ITEM(UBX_NMEA_GxGRS),
+            ITEM(UBX_NMEA_GxGST),
+            ITEM(UBX_NMEA_GxZDA),
+            ITEM(UBX_NMEA_GxGBS),
+            ITEM(UBX_NMEA_GxDTM),
+            ITEM(UBX_NMEA_GxGNS),
+            ITEM(UBX_NMEA_GxTHS),
+            ITEM(UBX_NMEA_GxVLW),
+            ITEM(UBX_PUBX_POS),
+            ITEM(UBX_PUBX_01),
+            ITEM(UBX_PUBX_SV),
+            ITEM(UBX_PUBX_TIME),
+            ITEM(UBX_PUBX_POS2),
+            ITEM(UBX_PUBX_POS3),
+        };
+#undef ITEM
+        uint8_t rate = 0;
+        for (i = 0; i < sizeof(class_id_nmea)/sizeof(*class_id_nmea); i ++) {
+            // set current rate
+            sz_buf = ublox_pkt_create_set_cfgmsg(buffer, sizeof(buffer), class_id_nmea[i][0], class_id_nmea[i][1], &rate, 1);
+            REQUIRE (sz_buf > 0);
+            ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+            CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+            REQUIRE(ret == 0);
+            REQUIRE(sz_processed == sz_buf);
+            REQUIRE(sz_needed_in == 0);
+        }
+    }
+
+    SECTION("test ublox_pkt_create_set_cfg_gnss") {
+        static uint8_t config_blocks[] = {
+            0x00, 0x04, 0xFF, 0x00, 0x01, 0x00, 0x00, 0x01,
+            0x01, 0x01, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01,
+            0x05, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01,
+            0x06, 0x08, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x01,
+        };
+        sz_buf = ublox_pkt_create_set_cfg_gnss(buffer, sizeof(buffer), 0, 0, 16, NUM_ARRAY(config_blocks)/8, config_blocks);
+        REQUIRE (sz_buf > 0);
+        ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+        CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+        REQUIRE(ret == 0);
+        REQUIRE(sz_processed == sz_buf);
+        REQUIRE(sz_needed_in == 0);
+    }
+
+    SECTION("test ublox_pkt_create_set_cfgcfg") {
+        sz_buf = ublox_pkt_create_set_cfgcfg(buffer, sizeof(buffer), 0x1F1F, 0x00, 0x1F1F, 0x17);
+        REQUIRE (sz_buf > 0);
+        ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+        CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+        REQUIRE(ret == 0);
+        REQUIRE(sz_processed == sz_buf);
+        REQUIRE(sz_needed_in == 0);
+    }
+
+    SECTION("test ublox_pkt_create_set_cfgmsg") {
+        uint8_t rate = 1;
+        sz_buf = ublox_pkt_create_set_cfgmsg(buffer, sizeof(buffer), UBLOX_2CLASS(UBX_NAV_PVT), UBLOX_2ID(UBX_NAV_PVT), &rate, 1);
+        REQUIRE (sz_buf > 0);
+        ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+        CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+        REQUIRE(ret == 0);
+        REQUIRE(sz_processed == sz_buf);
+        REQUIRE(sz_needed_in == 0);
+    }
+
+    SECTION("test ublox_pkt_create_get_cfgprt") {
+        sz_buf = ublox_pkt_create_get_cfgprt(buffer, sizeof(buffer), 3);
+        REQUIRE (sz_buf > 0);
+        ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+        CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+        REQUIRE(ret == 0);
+        REQUIRE(sz_processed == sz_buf);
+        REQUIRE(sz_needed_in == 0);
+    }
+
+    SECTION("test ublox_pkt_create_set_cfgprt") {
+#define BAUDRATE_WORKING 115200
+        sz_buf = ublox_pkt_create_set_cfgprt(buffer, sizeof(buffer), 0x01, 0x00, 0x000008D0, BAUDRATE_WORKING, 0x0027, 0x0023);
+        REQUIRE (sz_buf > 0);
+        ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+        CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+        REQUIRE(ret == 0);
+        REQUIRE(sz_processed == sz_buf);
+        REQUIRE(sz_needed_in == 0);
+    }
+
+    SECTION("test ublox_pkt_create_get_cfgrate") {
+        sz_buf = ublox_pkt_create_get_cfgrate(buffer, sizeof(buffer));
+        REQUIRE (sz_buf > 0);
+        ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+        CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+        REQUIRE(ret == 0);
+        REQUIRE(sz_processed == sz_buf);
+        REQUIRE(sz_needed_in == 0);
+    }
+
+    SECTION("test ublox_pkt_create_set_cfgrate") {
+        sz_buf = ublox_pkt_create_set_cfgrate(buffer, sizeof(buffer), 100, 1, 1);
+        REQUIRE (sz_buf > 0);
+        ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+        CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+        REQUIRE(ret == 0);
+        REQUIRE(sz_processed == sz_buf);
+        REQUIRE(sz_needed_in == 0);
+    }
+
+    SECTION("test ublox_pkt_create_get_version") {
+        sz_buf = ublox_pkt_create_get_version(buffer, sizeof(buffer));
+        REQUIRE (sz_buf > 0);
+        ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+        CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+        REQUIRE(ret == 0);
+        REQUIRE(sz_processed == sz_buf);
+        REQUIRE(sz_needed_in == 0);
+    }
+
+    SECTION("test ublox_pkt_create_get_hw") {
+        sz_buf = ublox_pkt_create_get_hw(buffer, sizeof(buffer));
+        REQUIRE (sz_buf > 0);
+        ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+        CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+        REQUIRE(ret == 0);
+        REQUIRE(sz_processed == sz_buf);
+        REQUIRE(sz_needed_in == 0);
+    }
+    SECTION("test ublox_pkt_create_get_hw2") {
+        sz_buf = ublox_pkt_create_get_hw2(buffer, sizeof(buffer));
+        REQUIRE (sz_buf > 0);
+        ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+        CIUT_LOG ("ublox_process_buffer_data() return %d", ret);
+        REQUIRE(ret == 0);
+        REQUIRE(sz_processed == sz_buf);
+        REQUIRE(sz_needed_in == 0);
+    }
+
 }
 #endif /* CIUT_ENABLED */
 
