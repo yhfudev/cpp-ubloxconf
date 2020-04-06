@@ -17,7 +17,6 @@
 #define CSTR_PROGVER "0.1.1"
 
 ////////////////////////////////////////////////////////////////////////////////
-#define USE_MENU   1
 
 #define USE_SDL 1
 #if defined(ARDUINO)
@@ -26,13 +25,12 @@
 #endif
 
 
-#define SHOW_DEMO_MENU_ITEMS 1 // demo MenuItem
-#define SHOW_DEMO_MENU_GFX   0
-#define SHOW_DEMO_MENU_ABOUT 1
-#if (USE_ADAGFX==1) || (USE_LCDGFX==1) || (USE_ST7920==1) || (USE_EMBGFX==1)
-#undef  SHOW_DEMO_MENU_GFX
-#define SHOW_DEMO_MENU_GFX   1
+#if defined(ARDUINO)
+#define USE_RTC_DS1307 1
+#define USE_GPS_PPS    1
+#else
+#define USE_RTC_DS1307 0
+#define USE_GPS_PPS    0
 #endif
-
 
 #endif // _CONFIG_SW_UBLOXCONF_H

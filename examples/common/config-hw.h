@@ -134,10 +134,10 @@
 #define PIN_LCD_T_CS       0
 #define PIN_LCD_T_IRQ     33
 
-// NEO-6M GPS Module
+// NEO-6M GPS Module @ UART 2
 #define PIN_GPS_PPS 32
-#define PIN_GPS_RX  16 // U2RX
-#define PIN_GPS_TX  17 // U0TX
+#define PIN_GPS_RX  17 // U2TX
+#define PIN_GPS_TX  16 // U2RX
 
 // LoRa 915M SX1276 Module
 #define PIN_RFM_MISO    19
@@ -188,6 +188,12 @@
 #define I2C_SCL 21
 #define OLED_RESET    -1
 
+
+// NEO-6M GPS Module @ UART 2
+#define PIN_GPS_PPS 32
+#define PIN_GPS_RX  16 // U2TX
+#define PIN_GPS_TX  17 // U2RX
+
 #else
 // Arduino Uno
 // __AVR_ATmega328P__, __AVR_ATmega32U4__
@@ -212,6 +218,11 @@
 #define I2C_SDA A4
 #define I2C_SCL A5
 #define OLED_RESET    -1
+
+// NEO-6M GPS Module
+#define PIN_GPS_PPS A1
+#define PIN_GPS_RX  2
+#define PIN_GPS_TX  3
 
 #endif
 

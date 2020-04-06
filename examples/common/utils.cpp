@@ -7,8 +7,8 @@
  * \copyright GPL/BSD
  */
 
+#include "osporting.h"
 #include "utils.h"
-
 
 #if defined(ARDUINO)
 #include "TimeLib.h"
