@@ -700,7 +700,7 @@ ublox_confline2bin_hex(char * buf, size_t size, uint8_t * buf_out, size_t sz_buf
  *
  */
 ssize_t
-ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, size_t sz_bufout)
+ublox_confline2bin_rtklibarg(const char * buf_in, size_t sz_bufin, char * buf_out, size_t sz_bufout)
 {
     ssize_t ret = -1;
     uint8_t class;

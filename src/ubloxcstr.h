@@ -26,7 +26,7 @@ int cstr2val_ublox_classid(char * buf, size_t size, uint8_t * p_class, uint8_t *
 ssize_t cstrlist2array_dec_val(const char *cstr_in, size_t len_cstr, char * buffer_out, size_t sz_bufout);
 ssize_t cstrlist2array_hex_val(const char *cstr_in, size_t len_cstr, char * buffer_out, size_t sz_bufout);
 
-ssize_t ublox_confline2bin_rtklibarg(char * buf_in, size_t sz_bufin, char * buf_out, size_t sz_bufout);
+ssize_t ublox_confline2bin_rtklibarg(const char * buf_in, size_t sz_bufin, char * buf_out, size_t sz_bufout);
 ssize_t ublox_confline2bin_hex(char * buf, size_t size, uint8_t * buf_out, size_t sz_bufout);
 
 #ifdef __cplusplus

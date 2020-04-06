@@ -51,8 +51,8 @@
 void
 ublox_pkt_checksum(void *buffer, int length, uint8_t * out_buf)
 {
-    char *chk_a = out_buf;
-    char *chk_b = out_buf + 1;
+    uint8_t *chk_a = out_buf;
+    uint8_t *chk_b = out_buf + 1;
 
     int i;
     assert (NULL != buffer);
@@ -950,17 +950,17 @@ ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, 
     p = buffer_in;
     p_end = buffer_in + sz_in;
     for (; p < p_end;) {
-        p = strchr(p, 0xB5);
+        p = memchr(p, 0xB5, p_end - p);
         if ((p >= p_end) || (p == 0)) {
             *sz_processed = sz_in;
-            *sz_needed_in = UBLOX_PKT_LENGTH_HDR;
+            *sz_needed_in = UBLOX_PKT_LENGTH_MIN;
             assert(*sz_processed <= sz_in);
             return 1;
         }
         if (p + 1 >= p_end) {
             assert (p + 1 == p_end);
             *sz_processed = p - buffer_in;
-            *sz_needed_in = UBLOX_PKT_LENGTH_HDR - (sz_in - *sz_processed);
+            *sz_needed_in = UBLOX_PKT_LENGTH_MIN - (sz_in - *sz_processed);
             assert ((sz_in - *sz_processed) == 1);
             assert(*sz_processed <= sz_in);
             return 1;
@@ -971,23 +971,85 @@ ublox_pkt_nexthdr_ubx(uint8_t * buffer_in, size_t sz_in, size_t * sz_processed, 
             continue;
         }
         *sz_processed = p - buffer_in;
-        *sz_needed_in = 0;
         if (*sz_processed > sz_in) {
             *sz_processed = sz_in;
         }
         assert(*sz_processed <= sz_in);
+        *sz_needed_in = 0;
+        if (p_end - p < UBLOX_PKT_LENGTH_HDR) {
+            // no length
+            *sz_needed_in = UBLOX_PKT_LENGTH_MIN - (sz_in - *sz_processed);;
+        } else {
+            // get the length
+            uint16_t len;
+            len = UBLOX_PKG_LENGTH(p);
+            if (sz_in - *sz_processed < UBLOX_PKT_LENGTH_MIN + len) {
+                *sz_needed_in = UBLOX_PKT_LENGTH_MIN - (sz_in - *sz_processed) + len;
+            }
+        }
+        if (*sz_needed_in > 0) {
+            return 1;
+        }
         return 0;
     }
     assert(*sz_processed <= sz_in);
     return -1;
 }
 
-// return the expected pkt size
+#if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
+#include <ciut.h>
+
+TEST_CASE( .name="test ublox_pkt_nexthdr_ubx", .description="Test ublox inner functions." ) {
+    uint8_t buffer[100];
+    ssize_t sz_buf;
+    size_t sz_processed = 0;
+    size_t sz_needed_in = 0;
+    int ret;
+    int i;
+
+    SECTION("test ublox_pkt_nexthdr_ubx") {
+        struct _hdr_next_t {
+            const char * data;
+            size_t sz_data;
+            int ret;
+            size_t sz_processed; // the expected size of processed data
+            size_t sz_needed_in; // the expected size of needed data
+        } data_nexthdr[] = {
+#define ITEM(str, ret, proc, need) {str, sizeof(str)-1, ret, proc, need}
+            ITEM("00 07 00 00 00 27 ", 1, 6, 8),
+            ITEM("00 07 00 00 00 27 B5 ", 1, 6, 7),
+            ITEM("00 07 00 00 00 27 B5 62 ", 1, 6, 6),
+            ITEM("00 07 00 00 00 27 B5 62 03 ", 1, 6, 5),
+            ITEM("00 07 00 00 00 27 B5 62 03 0A", 1, 6, 4),
+            ITEM("00 07 00 00 00 27 B5 62 03 0A 01", 1, 6, 3),
+            ITEM("00 07 00 00 00 27 B5 62 03 0A 01 00", 1, 6, 3),
+            ITEM("00 07 00 00 00 27 B5 62 03 0A 01 00 00", 1, 6, 2),
+            ITEM("00 07 00 00 00 27 B5 62 03 0A 01 00 00 00", 1, 6, 1),
+            ITEM("00 07 00 00 00 27 B5 62 03 0A 01 00 00 00 00", 0, 6, 0),
+            ITEM("00 07 00 00 00 27 B5 62 03 0A 01 00 00 00 00 00", 0, 6, 0),
+#undef ITEM
+        };
+
+        for (i = 0; i < NUM_ARRAY(data_nexthdr); i ++) {
+            REQUIRE(sizeof(buffer) >= (strlen(data_nexthdr[i].data) + 2)/3);
+            sz_buf = cstrlist2array_hex_val(data_nexthdr[i].data, data_nexthdr[i].sz_data, buffer, sizeof(buffer));
+            CIUT_LOG("--- test[%d] strlen=%d, expected return=%d, proc=%d, need=%d", i, sz_buf, data_nexthdr[i].ret, data_nexthdr[i].sz_processed, data_nexthdr[i].sz_needed_in);
+            ret = ublox_pkt_nexthdr_ubx(buffer, sz_buf, &sz_processed, &sz_needed_in);
+            CIUT_LOG("returned ret=%d, proc=%d, need=%d", ret, sz_processed, sz_needed_in);
+            REQUIRE(data_nexthdr[i].ret == ret);
+            REQUIRE(data_nexthdr[i].sz_processed == sz_processed);
+            REQUIRE(data_nexthdr[i].sz_needed_in == sz_needed_in);
+        }
+    }
+}
+#endif /* CIUT_ENABLED */
+
 size_t
 ublox_pkt_expected_size(uint8_t * buffer_in, size_t sz_in)
 {
     // check header
     if (buffer_in[0] != 0xB5) {
+        // not a packet
         return 0;
     }
     if (buffer_in[1] != 0x62) {
@@ -1012,7 +1074,6 @@ ublox_pkt_expected_size(uint8_t * buffer_in, size_t sz_in)
 
     return sz;
 }
-
 
 static char * ublox_val2cstr_gnss(int gnss)
 {
@@ -2234,7 +2295,7 @@ ublox_process_buffer_data(uint8_t * buffer_in, size_t sz_in, size_t * psz_proces
     sz_processed = 0;
     sz_needed_in = 0;
     ret = ublox_pkt_nexthdr_ubx(p, sz_in, &sz_processed, &sz_needed_in);
-    TD("ublox_pkt_nexthdr_ubx() ret=%d", ret);
+    //TD("ublox_pkt_nexthdr_ubx() ret=%d", ret);
     if (sz_processed > 0) {
         // remove the head of data of size sz_processed
         size_t sz_rest;
@@ -2472,4 +2533,43 @@ TEST_CASE( .name="test ublox_process_buffer_data 2", .description="Test ublox in
 }
 #endif /* CIUT_ENABLED */
 
+
+#if defined(CIUT_ENABLED) && (CIUT_ENABLED == 1)
+#include <ciut.h>
+
+TEST_CASE( .name="test ublox_process_buffer_data real", .description="Test ublox inner functions.", .skip=1 ) {
+    uint8_t buffer[300];
+    ssize_t sz_buf;
+    size_t sz_processed = 0;
+    size_t sz_needed_in = 0;
+    int ret;
+    int i;
+
+    SECTION("test ublox_process_buffer_data") {
+        struct _hdr_next_t {
+            const char * data;
+            size_t sz_data;
+            int ret;
+            size_t sz_processed; // the expected size of processed data
+            size_t sz_needed_in; // the expected size of needed data
+        } data_nexthdr[] = {
+#define ITEM(str, ret, proc, need) {str, sizeof(str)-1, ret, proc, need}
+#define CSTR_PKG_1 "B5 62 03 0A C0 00 00 06 E0 00 FF 21 44 20 02 DD 37 01 00 11 76 00 9A 1E 71 B5 62 03 58 F0 00 00 21 0C 00 82 2B 00 00 00 00 00 00 33 3F 00 00 91 00 31 26 FF FF 00 00 00 00 00 B5 62 03 0A C0 B0 02 FF FF 21 40 00 A0 7C 00 09 00 78 33 00 AB BE 00 00 11 FF 35 C5 00 00 FF 00 00 E6 33 FF 39 C5 00 00 00 00 00 00 00 FF 05 88 28 02 00 00 00 00 00 FF 00 00 00 00 B5 62 03 0A C0 00 3E 35 00 00 FF 38 F0 00 00 B5 62 03 0A C0 00 00 00 00 00 02 FF FF 21 44 C0 3C 54 01 01 B5 62 03 0A C0 00 00 00 00 00 00 96 37 00 00 00 00 00 00 00 FF B9 F1 00 00 1A 00 26 32 00 FF 00 00 00 00 FF 41 00 95 38 FF 11 00 1C 3A FF 0A"
+            ITEM(CSTR_PKG_1, 0, 200, 0),
+#undef ITEM
+        };
+
+        for (i = 0; i < NUM_ARRAY(data_nexthdr); i ++) {
+            REQUIRE(sizeof(buffer) >= (strlen(data_nexthdr[i].data) + 2)/3);
+            sz_buf = cstrlist2array_hex_val(data_nexthdr[i].data, data_nexthdr[i].sz_data, buffer, sizeof(buffer));
+            CIUT_LOG("--- test[%d] strlen=%d, expected return=%d, proc=%d, need=%d", i, sz_buf, data_nexthdr[i].ret, data_nexthdr[i].sz_processed, data_nexthdr[i].sz_needed_in);
+            ret = ublox_process_buffer_data(buffer, sz_buf, &sz_processed, &sz_needed_in);
+            CIUT_LOG("returned ret=%d, proc=%d, need=%d", ret, sz_processed, sz_needed_in);
+            REQUIRE(data_nexthdr[i].ret == ret);
+            REQUIRE(data_nexthdr[i].sz_processed == sz_processed);
+            REQUIRE(data_nexthdr[i].sz_needed_in == sz_needed_in);
+        }
+    }
+}
+#endif /* CIUT_ENABLED */
 
