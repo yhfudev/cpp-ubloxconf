@@ -26,7 +26,6 @@
 #define hex_dump_to_fp(a,b,c)
 #endif
 
-
 ////////////////////////////////////////////////////////////////////////////////
 #if 0
 #undef TD
@@ -81,17 +80,6 @@ void show_rtc () {
     , now.second()
     );
   TI("since midnight 1/1/1979 = %lds = %ld d", now.unixtime(), now.unixtime() / 86400L);
-    
-  // calculate a date which is 7 days and 30 seconds into the future
-  DateTime future (now.unixtime() + 7 * 86400L + 30);
-  TI("now+7d+30s=%04d/%02d/%02d %02d:%02d:%02d"
-    , future.year()
-    , future.month()
-    , future.day()
-    , future.hour()
-    , future.minute()
-    , future.second()
-    );
 #endif
 }
 
@@ -115,7 +103,8 @@ volatile int g_idx_cnt_cycle = 0;
 #if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32)
 ICACHE_RAM_ATTR
 #endif
-void do_count_cycle()
+void
+do_count_cycle()
 {
 #if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32)
   unsigned long cur = ESP.getCycleCount();
@@ -165,6 +154,7 @@ void loop_gps_pps()
 #define setup_gps_pps()
 #define loop_gps_pps()
 #endif
+
 ////////////////////////////////////////////////////////////////////////////////
 #if USE_GPS_PPS
 
@@ -331,7 +321,7 @@ void setup_gps()
   restore_work_baudrate();
 
   setup_ublox6_703();
-#if 1
+
   ssize_t sz_buf;
   uint8_t buffer[50];
   TD("get version");
@@ -358,7 +348,6 @@ void setup_gps()
   sz_buf = ublox_pkt_create_get_cfgrate(buffer, sizeof(buffer));
   assert (sz_buf > 0);
   uart_gps.write(buffer, sz_buf);
-#endif
 }
 
 uint8_t g_buffer_gps[1200];
